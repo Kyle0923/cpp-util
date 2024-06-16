@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import os
-import sys
+import json
 import re
 import argparse
 import clang.cindex
@@ -30,8 +30,12 @@ def find_classes(node, classes):
 def parse_file(filename, index):
     try:
         additional_options = ['-x', 'c++-header'] # treat .h as c++ header
-        # FIXME: proper include statement
-        additional_options += ['-Itest/inc1', '-Itest/inc2'] # treat .h as c++ header
+        abs_path = os.path.abspath(filename)
+        if abs_path in compile_db:
+            additional_options += compile_db[abs_path]
+        else:
+            additional_options += compile_default_options.keys()
+
         translation_unit = index.parse(filename, additional_options)
     except Exception as e:
         print(f"Error parsing file {filename}: {e}")
@@ -135,9 +139,53 @@ def generate_graph(parent_dict: dict, child_dict: dict, nodes: str | list, dot: 
                     # don't need the parent of the child
                     generate_graph(None, child_dict, other_node, dot, inserted)
 
+def get_compile_options(dir: str):
+
+    # when a file doesn't have entry in compile_commands.json or the json doesn't exist
+    # will use compile_default_options
+    global compile_default_options
+    compile_default_options = {}
+
+    global compile_db
+    compile_db = {}
+
+    if not args.compile_db:
+        args.compile_db = os.path.join(dir, "compile_commands.json")
+    if os.path.isfile(args.compile_db):
+        parse_compile_commands_json(args.compile_db)
+
+    guess_incl_path(dir)
+
+def parse_compile_commands_json(file: str):
+    with open(file) as fd:
+        json_db = json.load(fd)
+
+    for obj in json_db:
+        compile_options = trim_compile_options(obj["arguments"])
+        abs_path = os.path.abspath(obj["file"])
+        compile_db[abs_path] = compile_options
+
+# only keep -I, -D, and -std options
+def trim_compile_options(options: list):
+    trimmed = []
+    for opt in options:
+        if opt.startswith("-I") or opt.startswith("-D") or opt.startswith("-std"):
+            trimmed.append(opt)
+            compile_default_options[opt] = True
+    return trimmed
+
+def guess_incl_path(dir: str):
+    for dirpath, _, files in os.walk(dir):
+        for file in files:
+            if file.endswith('.h') or file.endswith('.hpp'):
+                compile_default_options[f"-I{dirpath}"] = True
+                break
+
 def main(directory):
     global project_dir
     project_dir = os.path.abspath(directory)
+
+    get_compile_options(directory)
 
     index = clang.cindex.Index.create()
     parent_dict = {} # key: class, value: base class
@@ -169,7 +217,6 @@ def graph_report(parent_dict: dict, query):
 
     for node in query:
         dot.node(node, style="filled, rounded", fillcolor="turquoise")
-        inserted[node] = True
 
     if not query:
         # print all nodes and edges
@@ -185,7 +232,7 @@ def graph_report(parent_dict: dict, query):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='generate the inheritance hierarchy')
-    parser.add_argument('--compile_db', metavar="compile_commands.json", help="JSON Compilation Database in Clang Format, \nwill attempt to use ./compile_commands.json when not provided")
+    parser.add_argument('--compile_db', metavar="compile_commands.json", help="JSON Compilation Database in Clang Format, will attempt to use ./compile_commands.json when not provided")
     parser.add_argument('--path', help="path to workspace root, defult is current directory")
     parser.add_argument('--tree', action='store_true', help="output in tree view instead of graph view")
     parser.add_argument('-b', '--base', action='store_true', help="only print the ancestor classes")
