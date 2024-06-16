@@ -10,6 +10,11 @@ import graphviz
 # any types defined under this directory will be considered project definition instead of system definition
 WS_ROOT = ""
 
+# when finished parsing the directory, this script will dump the result to this json file
+# the second run of this script will use this json file instead, this will save time for parsing
+# use --rebuild to regenerate this json file when source code is updated
+CLASS_GRAPH_DB_JSON = "class_graph_db.json"
+
 def is_project_defined_type(node):
     # Ensure both paths are absolute
     if node.location.file:
@@ -181,27 +186,6 @@ def guess_incl_path(dir: str):
                 compile_default_options[f"-I{dirpath}"] = True
                 break
 
-def main(directory):
-    global project_dir
-    project_dir = os.path.abspath(directory)
-
-    get_compile_options(directory)
-
-    index = clang.cindex.Index.create()
-    parent_dict = {} # key: class, value: base class
-    for root, _, files in os.walk(directory):
-        for file in files:
-            if file.endswith('.cpp') or file.endswith('.h') or file.endswith('.hpp'):
-                filepath = os.path.join(root, file)
-                classes = parse_file(filepath, index)
-                parent_dict.update(classes)
-
-    query = args.classes
-    if args.tree:
-        tree_report(parent_dict, query)
-    else:
-        graph_report(parent_dict, query)
-
 def tree_report(parent_dict, query):
     if args.base:
         print_ancestors(parent_dict, query)
@@ -229,9 +213,45 @@ def graph_report(parent_dict: dict, query):
     print("use https://dreampuf.github.io/GraphvizOnline/ to view graph")
     print("graph file is at ./class_graph")
 
+def generate_parent_dict(dir: str):
+    full_json_db_path = os.path.join(dir, CLASS_GRAPH_DB_JSON)
+    if os.path.isfile(full_json_db_path) and args.rebuild == False:
+        with open(full_json_db_path) as fd:
+            print(f"[[ {full_json_db_path} ]] exists, skip parsing source code, use --rebuild to force parsing source\n")
+            parent_dict = json.load(fd)
+            return parent_dict
+
+    global project_dir
+    project_dir = os.path.abspath(dir)
+
+    get_compile_options(dir)
+
+    index = clang.cindex.Index.create()
+    parent_dict = {} # key: class, value: base class
+    for root, _, files in os.walk(dir):
+        for file in files:
+            if file.endswith('.cpp') or file.endswith('.h') or file.endswith('.hpp'):
+                filepath = os.path.join(root, file)
+                classes = parse_file(filepath, index)
+                parent_dict.update(classes)
+
+    with open(full_json_db_path, 'w') as fd:
+        json.dump(parent_dict, fd)
+
+    return parent_dict
+
+def main(dir):
+    parent_dict = generate_parent_dict(dir)
+    query = args.classes
+    if args.tree:
+        tree_report(parent_dict, query)
+    else:
+        graph_report(parent_dict, query)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='generate the inheritance hierarchy')
+    parser.add_argument('--rebuild', action='store_true', help="regenerate the json database, use when source code is modify")
     parser.add_argument('--compile_db', metavar="compile_commands.json", help="JSON Compilation Database in Clang Format, will attempt to use ./compile_commands.json when not provided")
     parser.add_argument('--path', help="path to workspace root, defult is current directory")
     parser.add_argument('--tree', action='store_true', help="output in tree view instead of graph view")
