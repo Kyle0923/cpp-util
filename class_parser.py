@@ -144,7 +144,8 @@ def generate_graph(parent_dict: dict, child_dict: dict, nodes: str | list, dot: 
                     # don't need the parent of the child
                     generate_graph(None, child_dict, other_node, dot, inserted)
 
-def get_compile_options(dir: str):
+# return a list of the source files if compile_commands.json exists
+def get_compile_options(dir: str) -> list:
 
     # when a file doesn't have entry in compile_commands.json or the json doesn't exist
     # will use compile_default_options
@@ -158,8 +159,10 @@ def get_compile_options(dir: str):
         args.compile_db = os.path.join(dir, "compile_commands.json")
     if os.path.isfile(args.compile_db):
         parse_compile_commands_json(args.compile_db)
+        return compile_db.keys() # return a list of the source files
 
     guess_incl_path(dir)
+    return []
 
 def parse_compile_commands_json(file: str):
     with open(file) as fd:
@@ -224,13 +227,23 @@ def generate_parent_dict(dir: str):
     global project_dir
     project_dir = os.path.abspath(dir)
 
-    get_compile_options(dir)
+    src_files = get_compile_options(dir)
 
     index = clang.cindex.Index.create()
     parent_dict = {} # key: class, value: base class
-    for root, _, files in os.walk(dir):
-        for file in files:
-            if file.endswith('.cpp') or file.endswith('.h') or file.endswith('.hpp'):
+
+    print("starting parsing source files, this can take a while")
+    if src_files:
+        for src in src_files:
+            classes = parse_file(src, index)
+            parent_dict.update(classes)
+
+    else:
+        for root, _, files in os.walk(dir):
+            for file in files:
+                if not (file.endswith('.cpp') or file.endswith('.h') or file.endswith('.hpp')):
+                    continue
+                # file is .cpp or .h or .hpp
                 filepath = os.path.join(root, file)
                 classes = parse_file(filepath, index)
                 parent_dict.update(classes)
