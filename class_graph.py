@@ -4,7 +4,7 @@ import json
 import re
 import argparse
 import clang.cindex
-import graphviz
+import utils
 
 # workspace root
 # any types defined under this directory will be considered project definition instead of system definition
@@ -15,7 +15,7 @@ WS_ROOT = ""
 # use --rebuild to regenerate this json file when source code is updated
 CLASS_GRAPH_DB_JSON = "class_graph_db.json"
 
-def is_project_defined_type(node):
+def is_project_defined_symbol(node):
     # Ensure both paths are absolute
     if node.location.file:
         file_path = os.path.abspath(node.location.file.name)
@@ -24,7 +24,7 @@ def is_project_defined_type(node):
 
 def find_classes(node, classes):
     if node.kind in [clang.cindex.CursorKind.CLASS_DECL, clang.cindex.CursorKind.STRUCT_DECL]:
-        if node.is_definition() and is_project_defined_type(node):
+        if node.is_definition() and is_project_defined_symbol(node):
             class_name = node.spelling
             base_classes = [re.sub("^(class|struct)\\s+", "", base.spelling) for base in node.get_children() if base.kind == clang.cindex.CursorKind.CXX_BASE_SPECIFIER]
             if base_classes:
@@ -49,100 +49,6 @@ def parse_file(filename, index):
     classes = {}
     find_classes(translation_unit.cursor, classes)
     return classes
-
-def find_descendants(parent_dict: dict):
-    child_dict = {}
-    for derived, bases in parent_dict.items():
-        if derived not in child_dict:
-            child_dict[derived] = []
-        for base in bases:
-            if base not in child_dict:
-                child_dict[base] = []
-            child_dict[base].append(derived)
-    return child_dict
-
-def print_descendants(child_dict: dict, classes: list|str):
-    if not classes:
-        classes = [c for c in child_dict.keys() if all(c not in children for children in child_dict.values())]
-    print("#######################################################")
-    print("printing descendants")
-    print('============================')
-    print_tree(child_dict, classes, "", "descendants")
-    print("#######################################################")
-    print()
-
-
-def print_ancestors(parent_dict: dict, classes: list|str):
-    if not classes:
-        classes = [p for p in parent_dict.keys() if all(p not in parent for parent in parent_dict.values())]
-    print("#######################################################")
-    print("printing ancestors")
-    print('============================')
-    print_tree(parent_dict, classes, "", "ancestors")
-    print("#######################################################")
-    print()
-
-def print_tree(connection: dict, nodes: list|str, indent: str = "", msg: str = ""):
-    if isinstance(nodes, str):
-        nodes = [nodes]
-
-    for node in nodes:
-        is_top = (indent == "")
-        next_level_nodes = connection.get(node, [])
-        if is_top:
-            if not next_level_nodes:
-                print(node, f": no {msg} found")
-                return
-            else:
-                print(node)
-
-        for i, next_node in enumerate(next_level_nodes):
-            is_last = (i == len(next_level_nodes) - 1)
-            prefix = "└── " if is_last else "├── "
-            print(indent + prefix + next_node)
-            print_tree(connection, next_node, indent + ("    " if is_last else "│   ") )
-
-        if is_top:
-            print('----------------------------')
-
-# generate a graph view of the class hierarchy using Graphviz
-def generate_graph(parent_dict: dict, child_dict: dict, nodes: str | list, dot: graphviz.Digraph, inserted: dict):
-
-    if isinstance(nodes, str):
-        nodes = [nodes]
-
-    for curr_node in nodes:
-        # travese towards base
-        if parent_dict and args.base:
-            for other_node in parent_dict.get(curr_node, []):
-                inserted[other_node] = True
-                edge_key = f"{other_node}->{curr_node}"
-                if edge_key in inserted:
-                    continue
-
-                inserted[edge_key] = True
-                dot.edge(other_node, curr_node)
-                if args.connected:
-                    generate_graph(parent_dict, child_dict, other_node, dot, inserted)
-                else:
-                    # don't need the child of the parent
-                    generate_graph(parent_dict, None, other_node, dot, inserted)
-
-        # travese towards derived
-        if child_dict and args.derived:
-            for other_node in child_dict.get(curr_node, []):
-                inserted[other_node] = True
-                edge_key = f"{curr_node}->{other_node}"
-                if edge_key in inserted:
-                    continue
-
-                inserted[edge_key] = True
-                dot.edge(curr_node, other_node)
-                if args.connected:
-                    generate_graph(parent_dict, child_dict, other_node, dot, inserted)
-                else:
-                    # don't need the parent of the child
-                    generate_graph(None, child_dict, other_node, dot, inserted)
 
 # return a list of the source files if compile_commands.json exists
 def get_compile_options(dir: str) -> list:
@@ -174,7 +80,7 @@ def parse_compile_commands_json(file: str):
         compile_db[abs_path] = compile_options
 
 # only keep -I, -D, and -std options
-def trim_compile_options(options: list):
+def trim_compile_options(options: list) -> list:
     trimmed = []
     for opt in options:
         if opt.startswith("-I") or opt.startswith("-D") or opt.startswith("-std"):
@@ -188,33 +94,6 @@ def guess_incl_path(dir: str):
             if file.endswith('.h') or file.endswith('.hpp'):
                 compile_default_options[f"-I{dirpath}"] = True
                 break
-
-def tree_report(parent_dict, query):
-    if args.base:
-        print_ancestors(parent_dict, query)
-    if args.derived:
-        child_dict = find_descendants(parent_dict)
-        print_descendants(child_dict, query)
-
-def graph_report(parent_dict: dict, query):
-    dot = graphviz.Digraph()
-    dot.node_attr["shape"] = "box"
-    dot.node_attr["style"] = "rounded"
-    inserted = {}
-
-    for node in query:
-        dot.node(node, style="filled, rounded", fillcolor="turquoise")
-
-    if not query:
-        # print all nodes and edges
-        generate_graph(parent_dict, None, parent_dict.keys(), dot, inserted)
-    else:
-        child_dict = find_descendants(parent_dict)
-        generate_graph(parent_dict, child_dict, query, dot, inserted)
-
-    dot.render('class_graph', format='pdf')
-    print("use https://dreampuf.github.io/GraphvizOnline/ to view graph")
-    print("graph file is at ./class_graph")
 
 def generate_parent_dict(dir: str):
     full_json_db_path = os.path.join(dir, CLASS_GRAPH_DB_JSON)
@@ -257,9 +136,9 @@ def main(dir):
     parent_dict = generate_parent_dict(dir)
     query = args.classes
     if args.tree:
-        tree_report(parent_dict, query)
+        utils.tree_report(parent_dict, query, args)
     else:
-        graph_report(parent_dict, query)
+        utils.graph_report(parent_dict, query, "class_graph", args)
 
 
 if __name__ == "__main__":
