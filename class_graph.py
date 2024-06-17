@@ -46,6 +46,13 @@ def parse_file(filename, index):
         print(f"Error parsing file {filename}: {e}")
         return {}
 
+    for diag in translation_unit.diagnostics:
+        if 'file not found' in diag.spelling:
+            # possible incomplete parsing
+            global parse_error
+            parse_error = True
+            print(f"Missing include: {diag.spelling} - {diag.location.file}:{diag.location.line}")
+
     classes = {}
     find_classes(translation_unit.cursor, classes)
     return classes
@@ -97,7 +104,11 @@ def guess_incl_path(dir: str):
 
 def generate_parent_dict(dir: str):
     full_json_db_path = os.path.join(dir, CLASS_GRAPH_DB_JSON)
-    if os.path.isfile(full_json_db_path) and args.rebuild == False:
+
+    if args.rebuild:
+        os.remove(full_json_db_path)
+
+    if os.path.isfile(full_json_db_path):
         with open(full_json_db_path) as fd:
             print(f"[[ {full_json_db_path} ]] exists, skip parsing source code, use --rebuild to force parsing source\n")
             parent_dict = json.load(fd)
@@ -110,6 +121,9 @@ def generate_parent_dict(dir: str):
 
     index = clang.cindex.Index.create()
     parent_dict = {} # key: class, value: base class
+
+    global parse_error
+    parse_error = False
 
     print("starting parsing source files, this can take a while")
     if src_files:
@@ -127,8 +141,9 @@ def generate_parent_dict(dir: str):
                 classes = parse_file(filepath, index)
                 parent_dict.update(classes)
 
-    with open(full_json_db_path, 'w') as fd:
-        json.dump(parent_dict, fd)
+    if not parse_error:
+        with open(full_json_db_path, 'w') as fd:
+            json.dump(parent_dict, fd)
 
     return parent_dict
 
