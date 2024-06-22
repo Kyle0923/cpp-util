@@ -25,8 +25,8 @@ def is_project_defined_symbol(node):
 def find_classes(node, classes):
     if node.kind in [clang.cindex.CursorKind.CLASS_DECL, clang.cindex.CursorKind.STRUCT_DECL]:
         if node.is_definition() and is_project_defined_symbol(node):
-            class_name = node.spelling
-            base_classes = [re.sub("^(class|struct)\\s+", "", base.spelling) for base in node.get_children() if base.kind == clang.cindex.CursorKind.CXX_BASE_SPECIFIER]
+            class_name = utils.get_full_type_name(node)
+            base_classes = [utils.get_full_type_name(base) for base in node.get_children() if base.kind == clang.cindex.CursorKind.CXX_BASE_SPECIFIER]
             if base_classes:
                 classes[class_name] = base_classes
     for child in node.get_children():
@@ -52,6 +52,8 @@ def parse_file(filename, index):
             global parse_error
             parse_error = True
             print(f"Missing include: {diag.spelling} - {diag.location.file}:{diag.location.line}")
+
+    # utils.print_ast(translation_unit.cursor)
 
     classes = {}
     find_classes(translation_unit.cursor, classes)
@@ -105,7 +107,7 @@ def guess_incl_path(dir: str):
 def generate_parent_dict(dir: str):
     full_json_db_path = os.path.join(dir, CLASS_GRAPH_DB_JSON)
 
-    if args.rebuild:
+    if args.rebuild and os.path.isfile(full_json_db_path):
         os.remove(full_json_db_path)
 
     if os.path.isfile(full_json_db_path):

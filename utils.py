@@ -1,3 +1,4 @@
+import clang.cindex
 import graphviz
 
 def find_descendants(parent_dict: dict):
@@ -98,13 +99,12 @@ def generate_graph(parent_dict: dict, child_dict: dict, nodes: str | list, dot: 
         # travese towards base
         if parent_dict and args.base:
             for other_node in parent_dict.get(curr_node, []):
-                inserted[other_node] = True
                 edge_key = f"{other_node}->{curr_node}"
                 if edge_key in inserted:
+                    # TODO: verify if we could miss some case with `continue` here
                     continue
 
-                inserted[edge_key] = True
-                dot.edge(other_node, curr_node)
+                insert_to_dot(dot, other_node, curr_node, edge_key, inserted)
                 if args.connected:
                     generate_graph(parent_dict, child_dict, other_node, dot, inserted, args)
                 else:
@@ -117,13 +117,49 @@ def generate_graph(parent_dict: dict, child_dict: dict, nodes: str | list, dot: 
                 inserted[other_node] = True
                 edge_key = f"{curr_node}->{other_node}"
                 if edge_key in inserted:
+                    # TODO: verify if we could miss some case with `continue` here
                     continue
 
-                inserted[edge_key] = True
-                dot.edge(curr_node, other_node)
+                insert_to_dot(dot, curr_node, other_node, edge_key, inserted)
                 if args.connected:
                     generate_graph(parent_dict, child_dict, other_node, dot, inserted, args)
                 else:
                     # don't need the parent of the child
                     generate_graph(None, child_dict, other_node, dot, inserted, args)
 
+def insert_to_dot(dot: graphviz.Digraph, src: str, dest: str, edge_key: str, inserted: dict):
+    src_name = insert_node_to_dot(dot, src, inserted)
+    dest_name = insert_node_to_dot(dot, dest, inserted)
+    inserted[edge_key] = True
+    dot.edge(src_name, dest_name)
+
+# insert to dot if not exist
+# and return the escaped name of the node
+def insert_node_to_dot(dot: graphviz.Digraph, node: str, inserted: dict) -> str:
+    node_name = node
+    if "::" in node_name:
+        node_name = node_name.replace("::", "__")
+        if node not in inserted:
+            dot.node(node_name, node)
+    inserted[node] = True
+    return node_name
+
+##############################################################################################################
+# clang symbol handling
+##############################################################################################################
+
+# return the fully quilified name with the complete namespace
+def get_full_type_name(node: clang.cindex.CursorKind):
+    return node.type.get_declaration().type.spelling
+
+# print AST for debug
+def print_ast(node, level=0):
+    if (level == 1):
+        print("==========================")
+
+    if (level > 0):
+        print('    ' * (level - 1) + f'K: {node.kind}, S: {node.spelling}, D: {node.displayname}, S: {node.semantic_parent.spelling if node.semantic_parent else ""},' +
+                f'L: {node.lexical_parent.spelling if node.lexical_parent else ""}, T:{node.type.get_declaration().type.spelling}')
+
+    for child in node.get_children():
+        print_ast(child, level + 1)
