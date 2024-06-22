@@ -33,6 +33,12 @@ def find_classes(node, classes):
         find_classes(child, classes)
 
 def parse_file(filename, index):
+    if (utils.path_name_match(filename, args.excl)):
+        utils.verbal(args, "skipping ", filename)
+        return {}
+
+    utils.verbal(args, "parsing ", filename)
+
     try:
         additional_options = ['-x', 'c++-header'] # treat .h as c++ header
         abs_path = os.path.abspath(filename)
@@ -144,12 +150,14 @@ def generate_parent_dict(dir: str):
                 parent_dict.update(classes)
 
     if not parse_error:
+        utils.verbal(args, "saving parse output to", full_json_db_path)
         with open(full_json_db_path, 'w') as fd:
             json.dump(parent_dict, fd)
 
     return parent_dict
 
 def main(dir):
+    utils.verbal(args, "workspace path:", dir)
     parent_dict = generate_parent_dict(dir)
     query = args.classes
     if args.tree:
@@ -164,6 +172,8 @@ if __name__ == "__main__":
     parser.add_argument('--compile_db', metavar="compile_commands.json", help="JSON Compilation Database in Clang Format, will attempt to use ./compile_commands.json when not provided")
     parser.add_argument('--path', help="path to workspace root, defult is current directory")
     parser.add_argument('--tree', action='store_true', help="output in tree view instead of graph view")
+    parser.add_argument('--excl', action='append', help="file or directory names to be excluded, support glob, support multiple --excl")
+    parser.add_argument('-v', '--verbal', action='store_true', help="turn on verbel printouts")
     parser.add_argument('-b', '--base', action='store_true', help="only print the ancestor classes")
     parser.add_argument('-d', '--derived', action='store_true', help="only print the descendant classes")
     parser.add_argument('-r', '--related', action='store_true', help="print both the ancestor and descendant classes, this is the default")

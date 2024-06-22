@@ -1,5 +1,6 @@
 import clang.cindex
 import graphviz
+import fnmatch
 
 def find_descendants(parent_dict: dict):
     child_dict = {}
@@ -163,3 +164,29 @@ def print_ast(node, level=0):
 
     for child in node.get_children():
         print_ast(child, level + 1)
+
+##############################################################################################################
+# file system
+##############################################################################################################
+def path_name_match(path: str, patterns: list) -> bool:
+    if not patterns:
+        return False
+
+    for pattern in patterns:
+        if is_glob(pattern):
+            if fnmatch.fnmatch(path, pattern):
+                return True
+        else:
+            if pattern in path:
+                return True
+
+    return False
+
+def is_glob(pattern: str) -> bool:
+    glob_chars = ['*', '?', '[', ']', '{', '}', '!']
+    return any(char in pattern for char in glob_chars)
+
+def verbal(opton, *args):
+    if (opton.verbal):
+        print(*args)
+
