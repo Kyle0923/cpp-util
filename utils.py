@@ -102,7 +102,6 @@ def generate_graph(parent_dict: dict, child_dict: dict, nodes: str | list, dot: 
             for other_node in parent_dict.get(curr_node, []):
                 edge_key = f"{other_node}->{curr_node}"
                 if edge_key in inserted:
-                    # TODO: verify if we could miss some case with `continue` here
                     continue
 
                 insert_to_dot(dot, other_node, curr_node, edge_key, inserted)
@@ -118,7 +117,6 @@ def generate_graph(parent_dict: dict, child_dict: dict, nodes: str | list, dot: 
                 inserted[other_node] = True
                 edge_key = f"{curr_node}->{other_node}"
                 if edge_key in inserted:
-                    # TODO: verify if we could miss some case with `continue` here
                     continue
 
                 insert_to_dot(dot, curr_node, other_node, edge_key, inserted)
@@ -151,7 +149,25 @@ def insert_node_to_dot(dot: graphviz.Digraph, node: str, inserted: dict) -> str:
 
 # return the fully quilified name with the complete namespace
 def get_full_type_name(node: clang.cindex.CursorKind):
-    return node.type.get_declaration().type.spelling
+    type_name = node.type.get_declaration().type.spelling
+    return replace_std_string(node, type_name)
+
+# std::string usually expands to hard-to-read underlying type
+# replace_std_string() will convert it back to std::string
+std_string_canonical = ""
+def replace_std_string(node: clang.cindex.CursorKind, type_name: str):
+    global std_string_canonical
+    STD_STRING = "std::string"
+    if std_string_canonical:
+        return type_name.replace(std_string_canonical, STD_STRING)
+
+    if node.kind.is_declaration() or node.kind == clang.cindex.CursorKind.CXX_BASE_SPECIFIER:
+        for child in node.get_children():
+            if child.kind == clang.cindex.CursorKind.TYPE_REF and STD_STRING in child.spelling:
+                std_string_canonical = child.type.get_canonical().spelling
+                return type_name.replace(std_string_canonical, STD_STRING)
+
+    return type_name
 
 # print AST for debug
 def print_ast(node, level=0):
