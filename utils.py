@@ -78,15 +78,27 @@ def graph_report(parent_dict: dict, query, out_file: str, args, secondary_edge: 
     dot.node_attr["style"] = "rounded"
     inserted = {}
 
-    for node in query:
+    query_nodes = []
+    for query_name in query:
+        joined_list = []
+        for value in parent_dict.values():
+            joined_list.extend(value)
+        for node in [*parent_dict.keys(), *joined_list]:
+            if query_name == node or f"::{query_name}" in node:
+                query_nodes.append(node)
+
+    if (query):
+        verbal(args, f"query: {query}, found {len(query_nodes)} nodes", query_nodes)
+
+    for node in query_nodes:
         insert_node_to_dot(dot, node, inserted, style="filled, rounded", fillcolor="turquoise")
 
-    if not query:
+    if not query_nodes:
         # print all nodes and edges
         generate_graph(parent_dict, None, parent_dict.keys(), dot, inserted, args, secondary_edge)
     else:
         child_dict = find_descendants(parent_dict)
-        generate_graph(parent_dict, child_dict, query, dot, inserted, args, secondary_edge)
+        generate_graph(parent_dict, child_dict, query_nodes, dot, inserted, args, secondary_edge)
 
     dot.render(out_file, format='pdf')
     print("use https://dreampuf.github.io/GraphvizOnline/ to view graph")
