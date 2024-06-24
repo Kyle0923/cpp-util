@@ -24,11 +24,13 @@ def is_project_defined_symbol(node):
 
 def find_classes(node, classes, templates):
     node_name = utils.get_full_type_name(node)
+    if node_name in classes:
+        return
+
     if node.kind in [clang.cindex.CursorKind.CLASS_DECL, clang.cindex.CursorKind.STRUCT_DECL]:
         if node.is_definition() and is_project_defined_symbol(node):
             base_classes = [utils.get_full_type_name(base) for base in node.get_children() if base.kind == clang.cindex.CursorKind.CXX_BASE_SPECIFIER]
-            if base_classes:
-                classes[node_name] = base_classes
+            classes[node_name] = base_classes
     for child in node.get_children():
         find_classes(child, classes, templates)
 
@@ -38,14 +40,14 @@ def find_classes(node, classes, templates):
             templates[node_name] = []
         template_arg = node.type.get_template_argument_type(templ_idx).get_declaration()
         template_arg_name = utils.get_full_type_name(template_arg)
-        if template_arg_name:
+        if template_arg_name and is_project_defined_symbol(node):
             templates[node_name].append({"name": template_arg_name, "label": f"template#{templ_idx+1}"})
             find_classes(template_arg, classes, templates)
 
 def parse_file(filename, index):
     if (utils.path_name_match(filename, args.excl)):
         utils.verbal(args, "skipping ", filename)
-        return {}
+        return {}, {}
 
     utils.verbal(args, "parsing ", filename)
 
@@ -60,7 +62,7 @@ def parse_file(filename, index):
         translation_unit = index.parse(filename, additional_options)
     except Exception as e:
         print(f"Error parsing file {filename}: {e}")
-        return {}
+        return {}, {}
 
     for diag in translation_unit.diagnostics:
         if 'file not found' in diag.spelling:
