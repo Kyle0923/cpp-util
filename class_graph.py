@@ -22,15 +22,25 @@ def is_project_defined_symbol(node):
         return file_path.startswith(project_dir) or (WS_ROOT and file_path.startswith(WS_ROOT))
     return False
 
-def find_classes(node, classes):
+def find_classes(node, classes, templates):
+    node_name = utils.get_full_type_name(node)
     if node.kind in [clang.cindex.CursorKind.CLASS_DECL, clang.cindex.CursorKind.STRUCT_DECL]:
         if node.is_definition() and is_project_defined_symbol(node):
-            class_name = utils.get_full_type_name(node)
             base_classes = [utils.get_full_type_name(base) for base in node.get_children() if base.kind == clang.cindex.CursorKind.CXX_BASE_SPECIFIER]
             if base_classes:
-                classes[class_name] = base_classes
+                classes[node_name] = base_classes
     for child in node.get_children():
-        find_classes(child, classes)
+        find_classes(child, classes, templates)
+
+    # handle template args
+    for templ_idx in range(0, node.type.get_num_template_arguments()):
+        if node_name not in templates:
+            templates[node_name] = []
+        template_arg = node.type.get_template_argument_type(templ_idx).get_declaration()
+        template_arg_name = utils.get_full_type_name(template_arg)
+        if template_arg_name:
+            templates[node_name].append({"name": template_arg_name, "label": "template"})
+            find_classes(template_arg, classes, templates)
 
 def parse_file(filename, index):
     if (utils.path_name_match(filename, args.excl)):
@@ -60,10 +70,13 @@ def parse_file(filename, index):
             print(f"Missing include: {diag.spelling} - {diag.location.file}:{diag.location.line}")
 
     # utils.print_ast(translation_unit.cursor)
+    # exit(0)
+    # translation_unit.save(filename.replace('/', '__'))
 
     classes = {}
-    find_classes(translation_unit.cursor, classes)
-    return classes
+    templates = {}
+    find_classes(translation_unit.cursor, classes, templates)
+    return classes, templates
 
 # return a list of the source files if compile_commands.json exists
 def get_compile_options(dir: str) -> list:
@@ -119,8 +132,10 @@ def generate_parent_dict(dir: str):
     if os.path.isfile(full_json_db_path):
         with open(full_json_db_path) as fd:
             print(f"[[ {full_json_db_path} ]] exists, skip parsing source code, use --rebuild to force parsing source\n")
-            parent_dict = json.load(fd)
-            return parent_dict
+            db = json.load(fd)
+            parent_dict = db["parent_dict"]
+            template_dict = db["template_dict"]
+            return parent_dict, template_dict
 
     global project_dir
     project_dir = os.path.abspath(dir)
@@ -129,6 +144,7 @@ def generate_parent_dict(dir: str):
 
     index = clang.cindex.Index.create()
     parent_dict = {} # key: class, value: base class
+    template_dict = {} # key: class, value: template class
 
     global parse_error
     parse_error = False
@@ -136,8 +152,9 @@ def generate_parent_dict(dir: str):
     print("starting parsing source files, this can take a while")
     if src_files:
         for src in src_files:
-            classes = parse_file(src, index)
+            classes, template = parse_file(src, index)
             parent_dict.update(classes)
+            template_dict.update(template)
 
     else:
         for root, _, files in os.walk(dir):
@@ -146,24 +163,25 @@ def generate_parent_dict(dir: str):
                     continue
                 # file is .cpp or .h or .hpp
                 filepath = os.path.join(root, file)
-                classes = parse_file(filepath, index)
+                classes, template = parse_file(filepath, index)
                 parent_dict.update(classes)
+                template_dict.update(template)
 
     if not parse_error:
         utils.verbal(args, "saving parse output to", full_json_db_path)
         with open(full_json_db_path, 'w') as fd:
-            json.dump(parent_dict, fd)
+            json.dump({"parent_dict": parent_dict, "template_dict": template_dict}, fd)
 
-    return parent_dict
+    return parent_dict, template_dict
 
 def main(dir):
     utils.verbal(args, "workspace path:", dir)
-    parent_dict = generate_parent_dict(dir)
+    parent_dict, template_dict = generate_parent_dict(dir)
     query = args.classes
     if args.tree:
         utils.tree_report(parent_dict, query, args)
     else:
-        utils.graph_report(parent_dict, query, "class_graph", args)
+        utils.graph_report(parent_dict, query, "class_graph", args, template_dict)
 
 
 if __name__ == "__main__":

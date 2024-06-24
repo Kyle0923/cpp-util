@@ -70,7 +70,10 @@ def print_tree(connection: dict, nodes: list|str, indent: str = "", msg: str = "
 ##############################################################################################################
 # Graph report
 ##############################################################################################################
-def graph_report(parent_dict: dict, query, out_file: str, args):
+
+# secondary_edge is used to represent a secondary relation such as template edge
+# these edges are for illustration only and won't be used for calculating the rank
+def graph_report(parent_dict: dict, query, out_file: str, args, secondary_edge: dict):
     dot = graphviz.Digraph()
     dot.node_attr["shape"] = "box"
     dot.node_attr["style"] = "rounded"
@@ -81,17 +84,17 @@ def graph_report(parent_dict: dict, query, out_file: str, args):
 
     if not query:
         # print all nodes and edges
-        generate_graph(parent_dict, None, parent_dict.keys(), dot, inserted, args)
+        generate_graph(parent_dict, None, parent_dict.keys(), dot, inserted, args, secondary_edge)
     else:
         child_dict = find_descendants(parent_dict)
-        generate_graph(parent_dict, child_dict, query, dot, inserted, args)
+        generate_graph(parent_dict, child_dict, query, dot, inserted, args, secondary_edge)
 
     dot.render(out_file, format='pdf')
     print("use https://dreampuf.github.io/GraphvizOnline/ to view graph")
     print(f"graph file is at ./{out_file}")
 
 # generate a graph view of the class hierarchy using Graphviz
-def generate_graph(parent_dict: dict, child_dict: dict, nodes: str | list, dot: graphviz.Digraph, inserted: dict, args):
+def generate_graph(parent_dict: dict, child_dict: dict, nodes: str | list, dot: graphviz.Digraph, inserted: dict, args, secondary_edge: dict = {}):
 
     if isinstance(nodes, str):
         nodes = [nodes]
@@ -106,10 +109,10 @@ def generate_graph(parent_dict: dict, child_dict: dict, nodes: str | list, dot: 
 
                 insert_to_dot(dot, other_node, curr_node, edge_key, inserted)
                 if args.connected:
-                    generate_graph(parent_dict, child_dict, other_node, dot, inserted, args)
+                    generate_graph(parent_dict, child_dict, other_node, dot, inserted, args, secondary_edge)
                 else:
                     # don't need the child of the parent
-                    generate_graph(parent_dict, None, other_node, dot, inserted, args)
+                    generate_graph(parent_dict, None, other_node, dot, inserted, args, secondary_edge)
 
         # travese towards derived
         if child_dict and args.derived:
@@ -121,16 +124,31 @@ def generate_graph(parent_dict: dict, child_dict: dict, nodes: str | list, dot: 
 
                 insert_to_dot(dot, curr_node, other_node, edge_key, inserted)
                 if args.connected:
-                    generate_graph(parent_dict, child_dict, other_node, dot, inserted, args)
+                    generate_graph(parent_dict, child_dict, other_node, dot, inserted, args, secondary_edge)
                 else:
                     # don't need the parent of the child
-                    generate_graph(None, child_dict, other_node, dot, inserted, args)
+                    generate_graph(None, child_dict, other_node, dot, inserted, args, secondary_edge)
 
-def insert_to_dot(dot: graphviz.Digraph, src: str, dest: str, edge_key: str, inserted: dict):
+        # handle secondary_edge
+        if curr_node in secondary_edge:
+            for other_node in secondary_edge.get(curr_node, []):
+                edge_key = f"{other_node}->{curr_node}"
+                if edge_key in inserted:
+                    continue
+
+                edge_label = other_node["label"] if "label" in other_node else ""
+                insert_to_dot(dot, other_node["name"], curr_node, edge_key, inserted, constraint="false", \
+                              color="navy", arrowhead="odot", style="dashed", splines="false", minlen="5", \
+                              headlabel=edge_label)
+                generate_graph(parent_dict, {}, other_node["name"], dot, inserted, args, secondary_edge)
+                # TODO: test inheritance with template, even nested
+
+
+def insert_to_dot(dot: graphviz.Digraph, src: str, dest: str, edge_key: str, inserted: dict, **attrs):
     src_name = insert_node_to_dot(dot, src, inserted)
     dest_name = insert_node_to_dot(dot, dest, inserted)
     inserted[edge_key] = True
-    dot.edge(src_name, dest_name)
+    dot.edge(src_name, dest_name, **attrs)
 
 # insert to dot if not exist
 # and return the escaped name of the node
@@ -175,11 +193,18 @@ def print_ast(node, level=0):
         print("==========================")
 
     if (level > 0):
-        print('    ' * (level - 1) + f'K: {node.kind}, S: {node.spelling}, D: {node.displayname}, S: {node.semantic_parent.spelling if node.semantic_parent else ""},' +
-                f'L: {node.lexical_parent.spelling if node.lexical_parent else ""}, T:{node.type.get_declaration().type.spelling}')
+        print('    ' * (level - 1) + to_string(node))
+        # template_args = ""
+        # if (node.type.get_num_template_arguments() > 0):
+        #     template_args = node.type.get_template_argument_type(0).spelling
+        # print('    ' * (level - 1) + f'{node.spelling}, K:{node.kind}, T:{node.type.spelling}, #A: {node.type.get_num_template_arguments()}, A:{template_args}')
 
     for child in node.get_children():
         print_ast(child, level + 1)
+
+def to_string(node):
+    return f'K: {node.kind}, S: {node.spelling}, D: {node.displayname}, PS: {node.semantic_parent.spelling if node.semantic_parent else ""},' + \
+            f'L: {node.lexical_parent.spelling if node.lexical_parent else ""}, T:{node.type.get_declaration().type.spelling}'
 
 ##############################################################################################################
 # file system
