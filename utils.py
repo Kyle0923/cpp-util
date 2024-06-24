@@ -71,8 +71,7 @@ def print_tree(connection: dict, nodes: list|str, indent: str = "", msg: str = "
 # Graph report
 ##############################################################################################################
 
-# secondary_edge is used to represent a secondary relation such as template edge
-# these edges are for illustration only and won't be used for calculating the rank
+# secondary_edge is used to represent a secondary relation such as template link
 def graph_report(parent_dict: dict, query, out_file: str, args, secondary_edge: dict):
     dot = graphviz.Digraph()
     dot.node_attr["shape"] = "box"
@@ -80,7 +79,7 @@ def graph_report(parent_dict: dict, query, out_file: str, args, secondary_edge: 
     inserted = {}
 
     for node in query:
-        dot.node(node, style="filled, rounded", fillcolor="turquoise")
+        insert_node_to_dot(dot, node, inserted, style="filled, rounded", fillcolor="turquoise")
 
     if not query:
         # print all nodes and edges
@@ -95,7 +94,6 @@ def graph_report(parent_dict: dict, query, out_file: str, args, secondary_edge: 
 
 # generate a graph view of the class hierarchy using Graphviz
 def generate_graph(parent_dict: dict, child_dict: dict, nodes: str | list, dot: graphviz.Digraph, inserted: dict, args, secondary_edge: dict = {}):
-
     if isinstance(nodes, str):
         nodes = [nodes]
 
@@ -137,11 +135,10 @@ def generate_graph(parent_dict: dict, child_dict: dict, nodes: str | list, dot: 
                     continue
 
                 edge_label = other_node["label"] if "label" in other_node else ""
-                insert_to_dot(dot, other_node["name"], curr_node, edge_key, inserted, constraint="false", \
-                              color="navy", arrowhead="odot", style="dashed", splines="false", minlen="5", \
+                insert_to_dot(dot, other_node["name"], curr_node, edge_key, inserted, minlen="2", \
+                              color="navy", arrowhead="odot", style="dashed", splines="false", \
                               headlabel=edge_label)
                 generate_graph(parent_dict, {}, other_node["name"], dot, inserted, args, secondary_edge)
-                # TODO: test inheritance with template, even nested
 
 
 def insert_to_dot(dot: graphviz.Digraph, src: str, dest: str, edge_key: str, inserted: dict, **attrs):
@@ -152,12 +149,12 @@ def insert_to_dot(dot: graphviz.Digraph, src: str, dest: str, edge_key: str, ins
 
 # insert to dot if not exist
 # and return the escaped name of the node
-def insert_node_to_dot(dot: graphviz.Digraph, node: str, inserted: dict) -> str:
+def insert_node_to_dot(dot: graphviz.Digraph, node: str, inserted: dict, **attrs) -> str:
     node_name = node
     if "::" in node_name:
         node_name = node_name.replace("::", "__")
         if node not in inserted:
-            dot.node(node_name, node)
+            dot.node(node_name, break_long_name(node), **attrs)
     inserted[node] = True
     return node_name
 
@@ -207,7 +204,7 @@ def to_string(node):
             f'L: {node.lexical_parent.spelling if node.lexical_parent else ""}, T:{node.type.get_declaration().type.spelling}'
 
 ##############################################################################################################
-# file system
+# miscellaneous
 ##############################################################################################################
 def path_name_match(path: str, patterns: list) -> bool:
     if not patterns:
@@ -226,6 +223,26 @@ def path_name_match(path: str, patterns: list) -> bool:
 def is_glob(pattern: str) -> bool:
     glob_chars = ['*', '?', '[', ']', '{', '}', '!']
     return any(char in pattern for char in glob_chars)
+
+def find_last_double_colon_before_template(s):
+    # Find the index of the first occurrence of '<'
+    template_index = s.find('<')
+    if template_index == -1:
+        substring = s
+    else:
+        # Slice the string up to the first occurrence of '<'
+        substring = s[:template_index]
+
+    # Find the last occurrence of '::' in the sliced portion
+    return substring.rfind('::')
+
+def break_long_name(name):
+    if len(name) > 50:
+        index = find_last_double_colon_before_template(name)
+        if index != -1:
+            index += 2
+            return name[:index] + "\\n" + name[index:]
+    return name
 
 def verbal(opton, *args):
     if (opton.verbal):

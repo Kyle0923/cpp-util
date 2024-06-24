@@ -39,7 +39,7 @@ def find_classes(node, classes, templates):
         template_arg = node.type.get_template_argument_type(templ_idx).get_declaration()
         template_arg_name = utils.get_full_type_name(template_arg)
         if template_arg_name:
-            templates[node_name].append({"name": template_arg_name, "label": "template"})
+            templates[node_name].append({"name": template_arg_name, "label": f"template#{templ_idx+1}"})
             find_classes(template_arg, classes, templates)
 
 def parse_file(filename, index):
