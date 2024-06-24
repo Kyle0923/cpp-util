@@ -85,7 +85,8 @@ def graph_report(parent_dict: dict, query, out_file: str, args, secondary_edge: 
             joined_list.extend(value)
         for node in [*parent_dict.keys(), *joined_list]:
             if query_name == node or f"::{query_name}" in node:
-                query_nodes.append(node)
+                if node not in query_nodes:
+                    query_nodes.append(node)
 
     if (query):
         verbal(args, f"query: {query}, found {len(query_nodes)} nodes", query_nodes)
@@ -127,7 +128,6 @@ def generate_graph(parent_dict: dict, child_dict: dict, nodes: str | list, dot: 
         # travese towards derived
         if child_dict and args.derived:
             for other_node in child_dict.get(curr_node, []):
-                inserted[other_node] = True
                 edge_key = f"{curr_node}->{other_node}"
                 if edge_key in inserted:
                     continue
@@ -150,7 +150,11 @@ def generate_graph(parent_dict: dict, child_dict: dict, nodes: str | list, dot: 
                 insert_to_dot(dot, other_node["name"], curr_node, edge_key, inserted, minlen="2", \
                               color="navy", arrowhead="odot", style="dashed", splines="false", \
                               headlabel=edge_label)
-                generate_graph(parent_dict, {}, other_node["name"], dot, inserted, args, secondary_edge)
+                if args.connected:
+                    generate_graph(parent_dict, child_dict, other_node["name"], dot, inserted, args, secondary_edge)
+                else:
+                    # don't need the child of the parent
+                    generate_graph(parent_dict, None, other_node["name"], dot, inserted, args, secondary_edge)
 
 
 def insert_to_dot(dot: graphviz.Digraph, src: str, dest: str, edge_key: str, inserted: dict, **attrs):
