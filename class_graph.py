@@ -104,7 +104,7 @@ def parse_compile_commands_json(file: str):
 
     for obj in json_db:
         compile_options = trim_compile_options(obj["arguments"])
-        abs_path = os.path.abspath(obj["file"])
+        abs_path = os.path.abspath(obj["directory"], obj["file"])
         compile_db[abs_path] = compile_options
 
 # only keep -I, -D, and -std options
