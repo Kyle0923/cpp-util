@@ -170,7 +170,7 @@ def insert_node_to_dot(dot: graphviz.Digraph, node: str, inserted: dict, **attrs
     if "::" in node_name:
         node_name = node_name.replace("::", "__")
         if node not in inserted:
-            dot.node(node_name, break_long_name(node), **attrs)
+            dot.node(node_name, trim_namesapce(node), tooltip=node, **attrs)
     inserted[node] = True
     return node_name
 
@@ -258,6 +258,22 @@ def break_long_name(name):
         if index != -1:
             index += 2
             return name[:index] + "\\n" + name[index:]
+    return name
+
+# remove the namespaces
+def trim_namesapce(name: str):
+    index = find_last_double_colon_before_template(name)
+
+    # preserve std:: namespace
+    if index != -1 and not name.startswith("std::") :
+        name = name[index+2:]
+
+    # handle template args
+    if '<' in name and '>' in name:
+        template_arg = name[name.find('<')+1 : name.rfind('>')]
+        trimmed_arg = trim_namesapce(template_arg)
+        name = name.replace(template_arg, trimmed_arg)
+
     return name
 
 def verbal(opton, *args):
