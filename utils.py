@@ -23,7 +23,7 @@ def tree_report(parent_dict, query, args):
         child_dict = find_descendants(parent_dict)
         print_descendants(child_dict, query)
 
-def print_ancestors(parent_dict: dict, classes: list|str):
+def print_ancestors(parent_dict: dict, classes: list):
     if not classes:
         classes = [p for p in parent_dict.keys() if all(p not in parent for parent in parent_dict.values())]
     print("#######################################################")
@@ -33,7 +33,7 @@ def print_ancestors(parent_dict: dict, classes: list|str):
     print("#######################################################")
     print()
 
-def print_descendants(child_dict: dict, classes: list|str):
+def print_descendants(child_dict: dict, classes: list):
     if not classes:
         classes = [c for c in child_dict.keys() if all(c not in children for children in child_dict.values())]
     print("#######################################################")
@@ -43,7 +43,7 @@ def print_descendants(child_dict: dict, classes: list|str):
     print("#######################################################")
     print()
 
-def print_tree(connection: dict, nodes: list|str, indent: str = "", msg: str = ""):
+def print_tree(connection: dict, nodes: list, indent: str = "", msg: str = ""):
     if isinstance(nodes, str):
         nodes = [nodes]
 
@@ -106,7 +106,7 @@ def graph_report(parent_dict: dict, query, out_file: str, args, secondary_edge: 
     print(f"graph file is at ./{out_file}")
 
 # generate a graph view of the class hierarchy using Graphviz
-def generate_graph(parent_dict: dict, child_dict: dict, nodes: str | list, dot: graphviz.Digraph, inserted: dict, args, secondary_edge: dict = {}):
+def generate_graph(parent_dict: dict, child_dict: dict, nodes: list, dot: graphviz.Digraph, inserted: dict, args, secondary_edge: dict = {}):
     if isinstance(nodes, str):
         nodes = [nodes]
 
@@ -180,7 +180,7 @@ def insert_node_to_dot(dot: graphviz.Digraph, node: str, inserted: dict, **attrs
 
 # return the fully quilified name with the complete namespace
 def get_full_type_name(node: clang.cindex.CursorKind):
-    type_name = node.type.get_declaration().type.spelling
+    type_name = node.type.get_declaration().type.get_canonical().spelling
     return replace_std_string(node, type_name)
 
 # std::string usually expands to hard-to-read underlying type
@@ -216,8 +216,8 @@ def print_ast(node, level=0):
         print_ast(child, level + 1)
 
 def to_string(node):
-    return f'K: {node.kind}, S: {node.spelling}, D: {node.displayname}, PS: {node.semantic_parent.spelling if node.semantic_parent else ""},' + \
-            f'L: {node.lexical_parent.spelling if node.lexical_parent else ""}, T:{node.type.get_declaration().type.spelling}'
+    return f'S: {node.spelling}, K: {node.kind}, PS: {node.semantic_parent.spelling if node.semantic_parent else ""},' + \
+            f'L: {node.lexical_parent.spelling if node.lexical_parent else ""}, T: {node.type.get_declaration().type.spelling}, #T: {node.type.get_num_template_arguments()}'
 
 ##############################################################################################################
 # miscellaneous

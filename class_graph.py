@@ -22,27 +22,39 @@ def is_project_defined_symbol(node):
         return file_path.startswith(project_dir) or (WS_ROOT and file_path.startswith(WS_ROOT))
     return False
 
-def find_classes(node, classes, templates):
+def find_class_relations(node, inheritances: dict, templates: dict):
     node_name = utils.get_full_type_name(node)
-    if node_name in classes:
+    if node_name in inheritances:
         return
 
     if node.kind in [clang.cindex.CursorKind.CLASS_DECL, clang.cindex.CursorKind.STRUCT_DECL]:
         if node.is_definition() and is_project_defined_symbol(node):
             base_classes = [utils.get_full_type_name(base) for base in node.get_children() if base.kind == clang.cindex.CursorKind.CXX_BASE_SPECIFIER]
-            classes[node_name] = base_classes
+            inheritances[node_name] = base_classes
     for child in node.get_children():
-        find_classes(child, classes, templates)
+        find_class_relations(child, inheritances, templates)
 
     # handle template args
+    if node_name not in templates:
+        find_template_relations(node, inheritances, templates)
+
+def find_template_relations(node, inheritances: dict, templates: dict):
+    node_name = utils.get_full_type_name(node)
     for templ_idx in range(0, node.type.get_num_template_arguments()):
         if node_name not in templates:
             templates[node_name] = []
-        template_arg = node.type.get_template_argument_type(templ_idx).get_declaration()
-        template_arg_name = utils.get_full_type_name(template_arg)
+        template_node = node.type.get_template_argument_type(templ_idx).get_declaration()
+        template_arg_name = utils.get_full_type_name(template_node)
         if template_arg_name and is_project_defined_symbol(node):
-            templates[node_name].append({"name": template_arg_name, "label": f"template#{templ_idx+1}"})
-            find_classes(template_arg, classes, templates)
+            if template_arg_name not in [t_arg["name"] for t_arg in templates[node_name]]:
+                templates[node_name].append({"name": template_arg_name, "label": f"template#{templ_idx+1}"})
+                find_class_relations(template_node, inheritances, templates)
+            else:
+                # update existing link
+                for t_arg in templates[node_name]:
+                    if t_arg["name"] == template_arg_name:
+                        t_arg["label"] += f",#{templ_idx+1}"
+                        break
 
 def parse_file(filename, index):
     if (utils.path_name_match(filename, args.excl)):
@@ -77,7 +89,7 @@ def parse_file(filename, index):
 
     classes = {}
     templates = {}
-    find_classes(translation_unit.cursor, classes, templates)
+    find_class_relations(translation_unit.cursor, classes, templates)
     return classes, templates
 
 # return a list of the source files if compile_commands.json exists
