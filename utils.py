@@ -1,3 +1,4 @@
+import re
 import clang.cindex
 import graphviz
 import fnmatch
@@ -16,12 +17,13 @@ def find_descendants(parent_dict: dict):
 ##############################################################################################################
 # Tree report
 ##############################################################################################################
-def tree_report(parent_dict, query, args):
+def tree_report(parent_dict: dict, query: list, args):
+    query_nodes = search_query(parent_dict, {}, query)
     if args.base:
-        print_ancestors(parent_dict, query)
+        print_ancestors(parent_dict, query_nodes)
     if args.derived:
         child_dict = find_descendants(parent_dict)
-        print_descendants(child_dict, query)
+        print_descendants(child_dict, query_nodes)
 
 def print_ancestors(parent_dict: dict, classes: list):
     if not classes:
@@ -72,21 +74,13 @@ def print_tree(connection: dict, nodes: list, indent: str = "", msg: str = ""):
 ##############################################################################################################
 
 # secondary_edge is used to represent a secondary relation such as template link
-def graph_report(parent_dict: dict, query, out_file: str, args, secondary_edge: dict):
+def graph_report(parent_dict: dict, query: list, out_file: str, args, secondary_edge: dict):
     dot = graphviz.Digraph()
     dot.node_attr["shape"] = "box"
     dot.node_attr["style"] = "rounded"
     inserted = {}
 
-    query_nodes = []
-    for query_name in query:
-        joined_list = []
-        for value in parent_dict.values():
-            joined_list.extend(value)
-        for node in [*parent_dict.keys(), *joined_list]:
-            if query_name == node or f"::{query_name}" in node:
-                if node not in query_nodes:
-                    query_nodes.append(node)
+    query_nodes = search_query(parent_dict, secondary_edge, query)
 
     if (query):
         verbal(args, f"query: {query}, found {len(query_nodes)} nodes", query_nodes)
@@ -141,8 +135,8 @@ def generate_graph(parent_dict: dict, child_dict: dict, nodes: list, dot: graphv
 
         # handle secondary_edge
         if curr_node in secondary_edge:
-            for other_node in secondary_edge.get(curr_node, []):
-                edge_key = f"{other_node}->{curr_node}"
+            for other_node in secondary_edge[curr_node]:
+                edge_key = f"{other_node['name']}->{curr_node}"
                 if edge_key in inserted:
                     continue
 
@@ -170,7 +164,7 @@ def insert_node_to_dot(dot: graphviz.Digraph, node: str, inserted: dict, **attrs
     if "::" in node_name:
         node_name = node_name.replace("::", "__")
         if node not in inserted:
-            dot.node(node_name, trim_namesapce(node), tooltip=node, **attrs)
+            dot.node(node_name, trim_namespace(node), tooltip=node, **attrs)
     inserted[node] = True
     return node_name
 
@@ -261,22 +255,77 @@ def break_long_name(name):
     return name
 
 # remove the namespaces
-def trim_namesapce(name: str):
-    index = find_last_double_colon_before_template(name)
+def trim_namespace(type_name):
+    result = ''
+    temp_part = ''
 
-    # preserve std:: namespace
-    if index != -1 and not name.startswith("std::") :
-        name = name[index+2:]
+    for char in type_name:
+        if char == ' ':
+            continue
+        temp_part += char
+        if char == ':':
+            if temp_part == 'std:' or temp_part == 'std::':
+                continue
+            temp_part = ''
+        elif char == '<':
+            result += temp_part
+            temp_part = ''
+        elif char == '>':
+            result += temp_part
+            temp_part = ''
+        elif char == ',':
+            result += temp_part + ' '
+            temp_part = ''
+        else:
+            # do nothing
+            pass
+    result += temp_part
 
-    # handle template args
-    if '<' in name and '>' in name:
-        template_arg = name[name.find('<')+1 : name.rfind('>')]
-        trimmed_arg = trim_namesapce(template_arg)
-        name = name.replace(template_arg, trimmed_arg)
-
-    return name
+    return result
 
 def verbal(opton, *args):
     if (opton.verbal):
         print(*args)
 
+def search_query(parent_dict: dict, secondary_edge: dict, query: list):
+    query_nodes = []
+    node_list = []
+    for value in parent_dict.values():
+        node_list.extend(value)
+    node_list.extend(parent_dict.keys())
+    if secondary_edge:
+        for template_list in secondary_edge.values():
+            node_list.extend([template_arg["name"] for template_arg in template_list])
+
+        node_list.extend(secondary_edge.keys())
+
+    for query_name in query:
+        for node in node_list:
+            if match_query(node, query_name):
+                if node not in query_nodes:
+                    query_nodes.append(node)
+
+    print(query_nodes)
+    exit(0)
+    return query_nodes
+
+def match_query(declaration: str, query: str) -> bool:
+
+    # break down declaration like a::b<c::d, e>::f to [a::b, c::d, e, ::f]
+    pattern = r'[<>,]'
+    names = [n.strip() for n in re.split(pattern, declaration)]
+
+    if '*' not in query:
+        return exact_match_query(names, query)
+    else:
+        return fuzzy_match_query(names, query)
+
+def exact_match_query(names: list, query_name: str) -> bool:
+    for name in names:
+        if name == query_name or name.endswith(f"::{query_name}"):
+            return True
+    return False
+
+def fuzzy_match_query(names: list, query: str) -> bool:
+    query = "^(.*::)?" + query.replace("*", ".*") + "$"
+    return any([re.match(query, name) for name in names])

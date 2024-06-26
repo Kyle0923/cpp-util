@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import os
 import json
-import re
 import argparse
 import clang.cindex
 import utils
@@ -211,7 +210,7 @@ if __name__ == "__main__":
     parser.add_argument('-r', '--related', action='store_true', help="print both the ancestor and descendant classes, this is the default")
     parser.add_argument('-c', '--connected', '--all', action='store_true', help="print all classes that are connected to any of the ancestor and descendant classes, only available in graph report")
 
-    parser.add_argument('classes', nargs='*', help="name(s) of the querying class")
+    parser.add_argument('classes', nargs='*', help="name(s) of the querying class, use * for fuzzy match, e.g, a*d matches abd and abcd")
 
 
     global args
