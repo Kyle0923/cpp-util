@@ -34,7 +34,7 @@ def find_class_relations(node, inheritances: dict, templates: dict):
         find_class_relations(child, inheritances, templates)
 
     # handle template args
-    if node_name not in templates:
+    if is_project_defined_symbol(node) and (node_name not in templates):
         find_template_relations(node, inheritances, templates)
 
 def find_template_relations(node, inheritances: dict, templates: dict):

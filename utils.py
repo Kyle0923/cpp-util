@@ -18,12 +18,19 @@ def find_descendants(parent_dict: dict):
 # Tree report
 ##############################################################################################################
 def tree_report(parent_dict: dict, query: list, args):
-    query_nodes = search_query(parent_dict, {}, query)
+    matched_nodes = search_query(parent_dict, {}, query)
+    if query:
+        verbal(args, f"query: {query}, found {len(matched_nodes)} nodes", matched_nodes)
+
+    if query and not matched_nodes:
+        print("no symbol found for ", query)
+        print("consider using wildcard")
+        return
     if args.base:
-        print_ancestors(parent_dict, query_nodes)
+        print_ancestors(parent_dict, matched_nodes)
     if args.derived:
         child_dict = find_descendants(parent_dict)
-        print_descendants(child_dict, query_nodes)
+        print_descendants(child_dict, matched_nodes)
 
 def print_ancestors(parent_dict: dict, classes: list):
     if not classes:
@@ -31,7 +38,7 @@ def print_ancestors(parent_dict: dict, classes: list):
     print("#######################################################")
     print("printing ancestors")
     print('============================')
-    print_tree(parent_dict, classes, "", "ancestors")
+    tree_print(parent_dict, classes, "", "ancestors")
     print("#######################################################")
     print()
 
@@ -41,11 +48,11 @@ def print_descendants(child_dict: dict, classes: list):
     print("#######################################################")
     print("printing descendants")
     print('============================')
-    print_tree(child_dict, classes, "", "descendants")
+    tree_print(child_dict, classes, "", "descendants")
     print("#######################################################")
     print()
 
-def print_tree(connection: dict, nodes: list, indent: str = "", msg: str = ""):
+def tree_print(connection: dict, nodes: list, indent: str = "", msg: str = ""):
     if isinstance(nodes, str):
         nodes = [nodes]
 
@@ -63,7 +70,7 @@ def print_tree(connection: dict, nodes: list, indent: str = "", msg: str = ""):
             is_last = (i == len(next_level_nodes) - 1)
             prefix = "└── " if is_last else "├── "
             print(indent + prefix + next_node)
-            print_tree(connection, next_node, indent + ("    " if is_last else "│   ") )
+            tree_print(connection, next_node, indent + ("    " if is_last else "│   ") )
 
         if is_top:
             print('----------------------------')
@@ -80,20 +87,25 @@ def graph_report(parent_dict: dict, query: list, out_file: str, args, secondary_
     dot.node_attr["style"] = "rounded"
     inserted = {}
 
-    query_nodes = search_query(parent_dict, secondary_edge, query)
+    matched_nodes = search_query(parent_dict, secondary_edge, query)
 
-    if (query):
-        verbal(args, f"query: {query}, found {len(query_nodes)} nodes", query_nodes)
+    if query:
+        verbal(args, f"query: {query}, found {len(matched_nodes)} nodes", matched_nodes)
 
-    for node in query_nodes:
+    if query and not matched_nodes:
+        print("no symbol found for ", query)
+        print("consider using wildcard")
+        return
+
+    for node in matched_nodes:
         insert_node_to_dot(dot, node, inserted, style="filled, rounded", fillcolor="turquoise")
 
-    if not query_nodes:
+    if not matched_nodes:
         # print all nodes and edges
         generate_graph(parent_dict, None, parent_dict.keys(), dot, inserted, args, secondary_edge)
     else:
         child_dict = find_descendants(parent_dict)
-        generate_graph(parent_dict, child_dict, query_nodes, dot, inserted, args, secondary_edge)
+        generate_graph(parent_dict, child_dict, matched_nodes, dot, inserted, args, secondary_edge)
 
     dot.render(out_file, format='pdf')
     print("use https://dreampuf.github.io/GraphvizOnline/ to view graph")
@@ -211,7 +223,7 @@ def print_ast(node, level=0):
 
 def to_string(node):
     return f'S: {node.spelling}, K: {node.kind}, PS: {node.semantic_parent.spelling if node.semantic_parent else ""},' + \
-            f'L: {node.lexical_parent.spelling if node.lexical_parent else ""}, T: {node.type.get_declaration().type.spelling}, #T: {node.type.get_num_template_arguments()}'
+            f'L: {node.location.file.name if node.location.file else "NONE"}, T: {node.type.get_declaration().type.spelling}, #T: {node.type.get_num_template_arguments()}'
 
 ##############################################################################################################
 # miscellaneous
@@ -293,11 +305,14 @@ def search_query(parent_dict: dict, secondary_edge: dict, query: list):
     for value in parent_dict.values():
         node_list.extend(value)
     node_list.extend(parent_dict.keys())
-    if secondary_edge:
-        for template_list in secondary_edge.values():
-            node_list.extend([template_arg["name"] for template_arg in template_list])
 
-        node_list.extend(secondary_edge.keys())
+    # searching in secondary_edge can be noisy
+    # e.g., printing std::vector<BaseClass> doesn't provide much insight
+    # at the time being, we exclude the types starts with std:: to avoid the ones from stl
+    if secondary_edge:
+        for t_list in secondary_edge.values():
+            node_list.extend([t_arg["name"] for t_arg in t_list if not t_arg["name"].startswith("std::")])
+        node_list.extend([key for key in secondary_edge.keys() if not key.startswith("std::")])
 
     for query_name in query:
         for node in node_list:
@@ -305,8 +320,6 @@ def search_query(parent_dict: dict, secondary_edge: dict, query: list):
                 if node not in query_nodes:
                     query_nodes.append(node)
 
-    print(query_nodes)
-    exit(0)
     return query_nodes
 
 def match_query(declaration: str, query: str) -> bool:
