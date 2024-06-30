@@ -2,6 +2,8 @@ import re
 import clang.cindex
 import graphviz
 import fnmatch
+import os
+import json
 
 def find_descendants(parent_dict: dict):
     child_dict = {}
@@ -186,7 +188,7 @@ def insert_node_to_dot(dot: graphviz.Digraph, node: str, inserted: dict, **attrs
 
 # return the fully quilified name with the complete namespace
 def get_full_type_name(node: clang.cindex.CursorKind):
-    type_name = node.type.get_declaration().type.get_canonical().spelling
+    type_name = node.type.get_declaration().type.get_canonical().spelling or node.spelling
     return replace_std_string(node, type_name)
 
 # std::string usually expands to hard-to-read underlying type
@@ -222,8 +224,64 @@ def print_ast(node, level=0):
         print_ast(child, level + 1)
 
 def to_string(node):
+    loc_str = f"{node.location.file.name}:{node.location.line}" if node.location.file else ""
     return f'S: {node.spelling}, K: {node.kind}, PS: {node.semantic_parent.spelling if node.semantic_parent else ""},' + \
-            f'L: {node.location.file.name if node.location.file else "NONE"}, T: {node.type.get_declaration().type.spelling}, #T: {node.type.get_num_template_arguments()}'
+            f'L: {loc_str}, T: {node.type.kind.spelling}, #T: {node.type.get_num_template_arguments()}'
+
+##############################################################################################################
+# clang interaction
+##############################################################################################################
+# return a list of the source files if compile_commands.json exists
+def get_compile_options(dir: str, args) -> list:
+
+    # when a file doesn't have entry in compile_commands.json or the json doesn't exist
+    # will use compile_default_options
+    global compile_default_options
+    compile_default_options = {}
+
+    global compile_db
+    compile_db = {}
+
+    if not args.compile_db:
+        args.compile_db = os.path.join(dir, "compile_commands.json")
+    if os.path.isfile(args.compile_db):
+        parse_compile_commands_json(args.compile_db)
+        return compile_db.keys() # return a list of the source files
+
+    guess_incl_path(dir)
+    return []
+
+def parse_compile_commands_json(file: str):
+    with open(file) as fd:
+        json_db = json.load(fd)
+
+    for obj in json_db:
+        compile_options = trim_compile_options(obj["arguments"])
+        abs_path = os.path.join(obj["directory"], obj["file"])
+        compile_db[abs_path] = compile_options
+
+# only keep -I, -D, and -std options
+def trim_compile_options(options: list) -> list:
+    trimmed = []
+    for opt in options:
+        if opt.startswith("-I") or opt.startswith("-D") or opt.startswith("-std"):
+            trimmed.append(opt)
+            compile_default_options[opt] = True
+    return trimmed
+
+def guess_incl_path(dir: str):
+    for dirpath, _, files in os.walk(dir):
+        for file in files:
+            if file.endswith('.h') or file.endswith('.hpp'):
+                compile_default_options[f"-I{dirpath}"] = True
+                break
+
+def is_project_defined_symbol(node, project_dir: str, ws_root: str = ""):
+    # Ensure both paths are absolute
+    if node.location.file:
+        file_path = os.path.abspath(node.location.file.name)
+        return file_path.startswith(project_dir) or (ws_root and file_path.startswith(ws_root))
+    return False
 
 ##############################################################################################################
 # miscellaneous

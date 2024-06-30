@@ -14,27 +14,20 @@ WS_ROOT = ""
 # use --rebuild to regenerate this json file when source code is updated
 CLASS_GRAPH_DB_JSON = "class_graph_db.json"
 
-def is_project_defined_symbol(node):
-    # Ensure both paths are absolute
-    if node.location.file:
-        file_path = os.path.abspath(node.location.file.name)
-        return file_path.startswith(project_dir) or (WS_ROOT and file_path.startswith(WS_ROOT))
-    return False
-
 def find_class_relations(node, inheritances: dict, templates: dict):
     node_name = utils.get_full_type_name(node)
     if node_name in inheritances:
         return
 
-    if node.kind in [clang.cindex.CursorKind.CLASS_DECL, clang.cindex.CursorKind.STRUCT_DECL]:
-        if node.is_definition() and is_project_defined_symbol(node):
+    if node.kind in [clang.cindex.CursorKind.CLASS_DECL, clang.cindex.CursorKind.STRUCT_DECL, clang.cindex.CursorKind.CLASS_TEMPLATE]:
+        if node.is_definition() and utils.is_project_defined_symbol(node, project_dir, WS_ROOT):
             base_classes = [utils.get_full_type_name(base) for base in node.get_children() if base.kind == clang.cindex.CursorKind.CXX_BASE_SPECIFIER]
             inheritances[node_name] = base_classes
     for child in node.get_children():
         find_class_relations(child, inheritances, templates)
 
     # handle template args
-    if is_project_defined_symbol(node) and (node_name not in templates):
+    if utils.is_project_defined_symbol(node, project_dir, WS_ROOT) and (node_name not in templates):
         find_template_relations(node, inheritances, templates)
 
 def find_template_relations(node, inheritances: dict, templates: dict):
@@ -44,7 +37,7 @@ def find_template_relations(node, inheritances: dict, templates: dict):
             templates[node_name] = []
         template_node = node.type.get_template_argument_type(templ_idx).get_declaration()
         template_arg_name = utils.get_full_type_name(template_node)
-        if template_arg_name and is_project_defined_symbol(node):
+        if template_arg_name and utils.is_project_defined_symbol(node, project_dir, WS_ROOT):
             if template_arg_name not in [t_arg["name"] for t_arg in templates[node_name]]:
                 templates[node_name].append({"name": template_arg_name, "label": f"template#{templ_idx+1}"})
                 find_class_relations(template_node, inheritances, templates)
@@ -65,10 +58,10 @@ def parse_file(filename, index):
     try:
         additional_options = ['-x', 'c++-header'] # treat .h as c++ header
         abs_path = os.path.abspath(filename)
-        if abs_path in compile_db:
-            additional_options += compile_db[abs_path]
+        if abs_path in utils.compile_db:
+            additional_options += utils.compile_db[abs_path]
         else:
-            additional_options += compile_default_options.keys()
+            additional_options += utils.compile_default_options.keys()
 
         translation_unit = index.parse(filename, additional_options)
     except Exception as e:
@@ -91,51 +84,6 @@ def parse_file(filename, index):
     find_class_relations(translation_unit.cursor, classes, templates)
     return classes, templates
 
-# return a list of the source files if compile_commands.json exists
-def get_compile_options(dir: str) -> list:
-
-    # when a file doesn't have entry in compile_commands.json or the json doesn't exist
-    # will use compile_default_options
-    global compile_default_options
-    compile_default_options = {}
-
-    global compile_db
-    compile_db = {}
-
-    if not args.compile_db:
-        args.compile_db = os.path.join(dir, "compile_commands.json")
-    if os.path.isfile(args.compile_db):
-        parse_compile_commands_json(args.compile_db)
-        return compile_db.keys() # return a list of the source files
-
-    guess_incl_path(dir)
-    return []
-
-def parse_compile_commands_json(file: str):
-    with open(file) as fd:
-        json_db = json.load(fd)
-
-    for obj in json_db:
-        compile_options = trim_compile_options(obj["arguments"])
-        abs_path = os.path.join(obj["directory"], obj["file"])
-        compile_db[abs_path] = compile_options
-
-# only keep -I, -D, and -std options
-def trim_compile_options(options: list) -> list:
-    trimmed = []
-    for opt in options:
-        if opt.startswith("-I") or opt.startswith("-D") or opt.startswith("-std"):
-            trimmed.append(opt)
-            compile_default_options[opt] = True
-    return trimmed
-
-def guess_incl_path(dir: str):
-    for dirpath, _, files in os.walk(dir):
-        for file in files:
-            if file.endswith('.h') or file.endswith('.hpp'):
-                compile_default_options[f"-I{dirpath}"] = True
-                break
-
 def generate_parent_dict(dir: str):
     full_json_db_path = os.path.join(dir, CLASS_GRAPH_DB_JSON)
 
@@ -153,7 +101,7 @@ def generate_parent_dict(dir: str):
     global project_dir
     project_dir = os.path.abspath(dir)
 
-    src_files = get_compile_options(dir)
+    src_files = utils.get_compile_options(dir, args)
 
     index = clang.cindex.Index.create()
     parent_dict = {} # key: class, value: base class
