@@ -187,7 +187,7 @@ def insert_node_to_dot(dot: graphviz.Digraph, node: str, inserted: dict, **attrs
 ##############################################################################################################
 
 # return the fully quilified name with the complete namespace
-def get_full_type_name(node: clang.cindex.CursorKind):
+def get_full_type_name(node: clang.cindex.Cursor):
     type_name = node.type.get_declaration().type.get_canonical().spelling or node.spelling
     return replace_std_string(node, type_name)
 
@@ -223,16 +223,27 @@ def print_ast(node, level=0):
     for child in node.get_children():
         print_ast(child, level + 1)
 
-def to_string(node):
-    loc_str = f"{node.location.file.name}:{node.location.line}" if node.location.file else ""
+def to_string(node) -> str:
+    loc_str = get_symbol_loc(node)
     return f'S: {node.spelling}, K: {node.kind}, PS: {node.semantic_parent.spelling if node.semantic_parent else ""},' + \
             f'L: {loc_str}, T: {node.type.kind.spelling}, #T: {node.type.get_num_template_arguments()}'
+
+def get_symbol_loc(node) -> str:
+    loc = f"{node.location.file.name}:{node.location.line}" if node.location.file else ""
+    return loc
+
+def get_symbol_decl_loc_from_def(node) -> str:
+    return get_symbol_loc(node.canonical)
+
+def get_symbol_decl_loc_from_call(node) -> str:
+    return get_symbol_loc(node.referenced.canonical)
 
 ##############################################################################################################
 # clang interaction
 ##############################################################################################################
+
 # return a list of the source files if compile_commands.json exists
-def get_compile_options(dir: str, args) -> list:
+def parse_compile_options(dir: str, args) -> list:
 
     # when a file doesn't have entry in compile_commands.json or the json doesn't exist
     # will use compile_default_options

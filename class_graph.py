@@ -101,7 +101,7 @@ def generate_parent_dict(dir: str):
     global project_dir
     project_dir = os.path.abspath(dir)
 
-    src_files = utils.get_compile_options(dir, args)
+    src_files = utils.parse_compile_options(dir, args)
 
     index = clang.cindex.Index.create()
     parent_dict = {} # key: class, value: base class
