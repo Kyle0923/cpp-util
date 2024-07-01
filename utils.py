@@ -233,6 +233,9 @@ def get_symbol_loc(node) -> str:
     return loc
 
 def get_symbol_decl_loc_from_def(node) -> str:
+    if (node.kind == clang.cindex.CursorKind.FUNCTION_TEMPLATE):
+        # use the definition location instead
+        return get_symbol_loc(node)
     return get_symbol_loc(node.canonical)
 
 def get_symbol_decl_loc_from_call(node) -> str:

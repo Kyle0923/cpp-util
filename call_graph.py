@@ -15,9 +15,8 @@ def register_func(node: clang.cindex.Cursor, has_template_callee: bool = False):
     global symbol_dict
     # node = node.get_definition()
     if not node or node.kind not in [clang.cindex.CursorKind.CXX_METHOD, clang.cindex.CursorKind.FUNCTION_DECL, clang.cindex.CursorKind.FUNCTION_TEMPLATE]:
-        # print(node.spelling)
-        # raise ("wrong kind")
-        return
+        print(node.spelling)
+        raise ("wrong kind")
     loc = utils.get_symbol_decl_loc_from_def(node)
     if loc in symbol_dict:
         # has_template_callee == True means further process is needed when this function is called
