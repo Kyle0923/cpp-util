@@ -238,9 +238,6 @@ def get_symbol_decl_loc_from_def(node) -> str:
         return get_symbol_loc(node)
     return get_symbol_loc(node.canonical)
 
-def get_symbol_decl_loc_from_call(node) -> str:
-    return get_symbol_loc(node.referenced.canonical)
-
 ##############################################################################################################
 # clang interaction
 ##############################################################################################################

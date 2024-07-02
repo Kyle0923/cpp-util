@@ -4,7 +4,7 @@
 class Foo {
 public:
     int func1();
-    int func2(int a);
+    int func2(int);
     template<class U>
     int func2(U b);
     static int func4(int a, int b);

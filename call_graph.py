@@ -64,15 +64,16 @@ def get_param_list(node: clang.cindex.Cursor):
             if child.kind != clang.cindex.CursorKind.PARM_DECL:
                 continue
             param_name = child.spelling
+            param_type = ""
             for grandchild in child.get_children():
                 if grandchild.kind != clang.cindex.CursorKind.TYPE_REF:
                     continue
                 param_type = grandchild.spelling
                 break
-            params.append(f"{param_type} {param_name}")
+            params.append(f"{param_type} {param_name}".strip())
     else:
         for param in node.get_arguments():
-            params.append(param.type.spelling + " " + param.spelling)
+            params.append( (param.type.spelling + " " + param.spelling).strip() )
 
     param_str = ", ".join(params)
     return param_str
@@ -82,9 +83,9 @@ def process_ast(cursor: clang.cindex.Cursor):
     for node in cursor.walk_preorder():
         if node.kind not in [clang.cindex.CursorKind.CXX_METHOD, clang.cindex.CursorKind.FUNCTION_DECL, clang.cindex.CursorKind.FUNCTION_TEMPLATE]:
             continue
-        caller_loc = register_func(node)
         if not utils.is_project_defined_symbol(node, project_dir):
             continue
+        caller_loc = register_func(node)
         if caller_loc in call_dict and symbol_dict[caller_loc]["has_template_callee"] == False:
             continue
         callee = {} # use dict to avoid duplicates
@@ -103,7 +104,7 @@ def process_ast(cursor: clang.cindex.Cursor):
                 if (child.get_definition() and child.get_definition().is_default_method()):
                     # compiler-provided methods such as default ctor, copy/move ctor, ...
                     continue
-                callee_loc = utils.get_symbol_decl_loc_from_call(child)
+                callee_loc = register_func(child.referenced)
                 callee[callee_loc] = True
                 if symbol_dict[callee_loc]["has_template_callee"] == True and child.get_definition():
                     # child.get_definition() points to the clang-instantiated version of the template function
