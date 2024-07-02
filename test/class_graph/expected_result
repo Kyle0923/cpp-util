@@ -1,0 +1,51 @@
+digraph {
+	node [shape=box style=rounded]
+	Base2 -> Derive2
+	Derive2 -> Derive22
+	"std__vector<NAME_SPACE1__NAME_SPACE2__Base0>" [label="std::vector<Base0>" tooltip="std::vector<NAME_SPACE1::NAME_SPACE2::Base0>"]
+	NAME_SPACE1__NAME_SPACE2__D [label=D tooltip="NAME_SPACE1::NAME_SPACE2::D"]
+	"std__vector<NAME_SPACE1__NAME_SPACE2__Base0>" -> NAME_SPACE1__NAME_SPACE2__D
+	NAME_SPACE1__NAME_SPACE2__Base0 [label=Base0 tooltip="NAME_SPACE1::NAME_SPACE2::Base0"]
+	NAME_SPACE1__NAME_SPACE2__Base0 -> "std__vector<NAME_SPACE1__NAME_SPACE2__Base0>" [arrowhead=odot color=navy headlabel="template#1" minlen=2 splines=false style=dashed]
+	NAME_SPACE1__NAME_SPACE2__Base1 [label=Base1 tooltip="NAME_SPACE1::NAME_SPACE2::Base1"]
+	NAME_SPACE1__NAME_SPACE2__Base0 -> NAME_SPACE1__NAME_SPACE2__Base1
+	NAME_SPACE1__NAME_SPACE2__Derive1 [label=Derive1 tooltip="NAME_SPACE1::NAME_SPACE2::Derive1"]
+	NAME_SPACE1__NAME_SPACE2__Base1 -> NAME_SPACE1__NAME_SPACE2__Derive1
+	NAME_SPACE1__NAME_SPACE2__Derive3 [label=Derive3 tooltip="NAME_SPACE1::NAME_SPACE2::Derive3"]
+	NAME_SPACE1__NAME_SPACE2__Base1 -> NAME_SPACE1__NAME_SPACE2__Derive3
+	Base2 -> NAME_SPACE1__NAME_SPACE2__Derive3
+	"NAME_SPACE4__NAME_SPACE3__TBase2<int, float>" [label="TBase2<int, float>" tooltip="NAME_SPACE4::NAME_SPACE3::TBase2<int, float>"]
+	NAME_SPACE1__NAME_SPACE2__TDerive1 [label=TDerive1 tooltip="NAME_SPACE1::NAME_SPACE2::TDerive1"]
+	"NAME_SPACE4__NAME_SPACE3__TBase2<int, float>" -> NAME_SPACE1__NAME_SPACE2__TDerive1
+	NAME_SPACE1__NAME_SPACE2__TDerive2 [label=TDerive2 tooltip="NAME_SPACE1::NAME_SPACE2::TDerive2"]
+	"NAME_SPACE4__NAME_SPACE3__TBase2<int, float>" -> NAME_SPACE1__NAME_SPACE2__TDerive2
+	"NAME_SPACE1__TBase1<NAME_SPACE4__NAME_SPACE3__TBase2<NAME_SPACE4__NAME_SPACE3__TBase2<int, float>, Derive2>>" [label="TBase1<TBase2<TBase2<int, float>, Derive2>>" tooltip="NAME_SPACE1::TBase1<NAME_SPACE4::NAME_SPACE3::TBase2<NAME_SPACE4::NAME_SPACE3::TBase2<int, float>, Derive2>>"]
+	NAME_SPACE1__TDerive3 [label=TDerive3 tooltip="NAME_SPACE1::TDerive3"]
+	"NAME_SPACE1__TBase1<NAME_SPACE4__NAME_SPACE3__TBase2<NAME_SPACE4__NAME_SPACE3__TBase2<int, float>, Derive2>>" -> NAME_SPACE1__TDerive3
+	"NAME_SPACE4__NAME_SPACE3__TBase2<NAME_SPACE4__NAME_SPACE3__TBase2<int, float>, Derive2>" [label="TBase2<TBase2<int, float>, Derive2>" tooltip="NAME_SPACE4::NAME_SPACE3::TBase2<NAME_SPACE4::NAME_SPACE3::TBase2<int, float>, Derive2>"]
+	"NAME_SPACE4__NAME_SPACE3__TBase2<NAME_SPACE4__NAME_SPACE3__TBase2<int, float>, Derive2>" -> "NAME_SPACE1__TBase1<NAME_SPACE4__NAME_SPACE3__TBase2<NAME_SPACE4__NAME_SPACE3__TBase2<int, float>, Derive2>>" [arrowhead=odot color=navy headlabel="template#1" minlen=2 splines=false style=dashed]
+	"NAME_SPACE4__NAME_SPACE3__TBase2<int, float>" -> "NAME_SPACE4__NAME_SPACE3__TBase2<NAME_SPACE4__NAME_SPACE3__TBase2<int, float>, Derive2>" [arrowhead=odot color=navy headlabel="template#1" minlen=2 splines=false style=dashed]
+	Derive2 -> "NAME_SPACE4__NAME_SPACE3__TBase2<NAME_SPACE4__NAME_SPACE3__TBase2<int, float>, Derive2>" [arrowhead=odot color=navy headlabel="template#2" minlen=2 splines=false style=dashed]
+	"NAME_SPACE4__NAME_SPACE3__TBase2<Derive2, Derive2>" [label="TBase2<Derive2, Derive2>" tooltip="NAME_SPACE4::NAME_SPACE3::TBase2<Derive2, Derive2>"]
+	NAME_SPACE1__TDerive4 [label=TDerive4 tooltip="NAME_SPACE1::TDerive4"]
+	"NAME_SPACE4__NAME_SPACE3__TBase2<Derive2, Derive2>" -> NAME_SPACE1__TDerive4
+	Derive2 -> "NAME_SPACE4__NAME_SPACE3__TBase2<Derive2, Derive2>" [arrowhead=odot color=navy headlabel="template#1,#2" minlen=2 splines=false style=dashed]
+	"NAME_SPACE4__NAME_SPACE3__TBase2<Derive22, Derive22>" [label="TBase2<Derive22, Derive22>" tooltip="NAME_SPACE4::NAME_SPACE3::TBase2<Derive22, Derive22>"]
+	NAME_SPACE1__TDerive6 [label=TDerive6 tooltip="NAME_SPACE1::TDerive6"]
+	"NAME_SPACE4__NAME_SPACE3__TBase2<Derive22, Derive22>" -> NAME_SPACE1__TDerive6
+	Derive22 -> "NAME_SPACE4__NAME_SPACE3__TBase2<Derive22, Derive22>" [arrowhead=odot color=navy headlabel="template#1,#2" minlen=2 splines=false style=dashed]
+	"NAME_SPACE4__NAME_SPACE3__TBase2<NAME_SPACE1__TBase1<int>, int>" [label="TBase2<TBase1<int>, int>" tooltip="NAME_SPACE4::NAME_SPACE3::TBase2<NAME_SPACE1::TBase1<int>, int>"]
+	NAME_SPACE1__TDerive7 [label=TDerive7 tooltip="NAME_SPACE1::TDerive7"]
+	"NAME_SPACE4__NAME_SPACE3__TBase2<NAME_SPACE1__TBase1<int>, int>" -> NAME_SPACE1__TDerive7
+	"NAME_SPACE1__TBase1<int>" [label="TBase1<int>" tooltip="NAME_SPACE1::TBase1<int>"]
+	"NAME_SPACE1__TBase1<int>" -> "NAME_SPACE4__NAME_SPACE3__TBase2<NAME_SPACE1__TBase1<int>, int>" [arrowhead=odot color=navy headlabel="template#1" minlen=2 splines=false style=dashed]
+	NAME_SPACE1__Derive8 [label=Derive8 tooltip="NAME_SPACE1::Derive8"]
+	NAME_SPACE1__TDerive7 -> NAME_SPACE1__Derive8
+	NAME_SPACE1__DiamondRight [label=DiamondRight tooltip="NAME_SPACE1::DiamondRight"]
+	NAME_SPACE1__NAME_SPACE2__Base1 -> NAME_SPACE1__DiamondRight
+	NAME_SPACE1__DiamondLeft [label=DiamondLeft tooltip="NAME_SPACE1::DiamondLeft"]
+	NAME_SPACE1__NAME_SPACE2__Base1 -> NAME_SPACE1__DiamondLeft
+	NAME_SPACE1__DiamondDerive [label=DiamondDerive tooltip="NAME_SPACE1::DiamondDerive"]
+	NAME_SPACE1__DiamondRight -> NAME_SPACE1__DiamondDerive
+	NAME_SPACE1__DiamondLeft -> NAME_SPACE1__DiamondDerive
+}

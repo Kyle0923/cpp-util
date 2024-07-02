@@ -1,0 +1,26 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/g++",
+      "-c",
+      "-o",
+      "src/c1.o",
+      "src/c1.cpp"
+    ],
+    "directory": "/home/user/programming/cpp-util/test/call_graph",
+    "file": "/home/user/programming/cpp-util/test/call_graph/src/c1.cpp",
+    "output": "/home/user/programming/cpp-util/test/call_graph/src/c1.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/g++",
+      "-c",
+      "-o",
+      "src/c2.o",
+      "src/c2.cpp"
+    ],
+    "directory": "/home/user/programming/cpp-util/test/call_graph",
+    "file": "/home/user/programming/cpp-util/test/call_graph/src/c2.cpp",
+    "output": "/home/user/programming/cpp-util/test/call_graph/src/c2.o"
+  }
+]
