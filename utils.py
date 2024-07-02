@@ -20,7 +20,7 @@ def find_descendants(parent_dict: dict):
 # Tree report
 ##############################################################################################################
 def tree_report(parent_dict: dict, query: list, args):
-    matched_nodes = search_query(parent_dict, {}, query)
+    matched_nodes = search_query_from_dict(parent_dict, {}, query)
     if query:
         verbal(args, f"query: {query}, found {len(matched_nodes)} nodes", matched_nodes)
 
@@ -89,7 +89,7 @@ def graph_report(parent_dict: dict, query: list, out_file: str, args, secondary_
     dot.node_attr["style"] = "rounded"
     inserted = {}
 
-    matched_nodes = search_query(parent_dict, secondary_edge, query)
+    matched_nodes = search_query_from_dict(parent_dict, secondary_edge, query)
 
     if query:
         verbal(args, f"query: {query}, found {len(matched_nodes)} nodes", matched_nodes)
@@ -368,8 +368,7 @@ def verbal(opton, *args):
     if (opton.verbal):
         print(*args)
 
-def search_query(parent_dict: dict, secondary_edge: dict, query: list):
-    query_nodes = []
+def search_query_from_dict(parent_dict: dict, secondary_edge: dict, query: list):
     node_list = []
     for value in parent_dict.values():
         node_list.extend(value)
@@ -383,18 +382,22 @@ def search_query(parent_dict: dict, secondary_edge: dict, query: list):
             node_list.extend([t_arg["name"] for t_arg in t_list if not t_arg["name"].startswith("std::")])
         node_list.extend([key for key in secondary_edge.keys() if not key.startswith("std::")])
 
+    return search_query(node_list, query)
+
+def search_query(node_list: list, query: list):
+    result = []
     for query_name in query:
         for node in node_list:
             if match_query(node, query_name):
-                if node not in query_nodes:
-                    query_nodes.append(node)
+                if node not in result:
+                    result.append(node)
 
-    return query_nodes
+    return result
 
 def match_query(declaration: str, query: str) -> bool:
 
     # break down declaration like a::b<c::d, e>::f to [a::b, c::d, e, ::f]
-    pattern = r'[<>,]'
+    pattern = r'[<>,() ]'
     names = [n.strip() for n in re.split(pattern, declaration)]
 
     if '*' not in query:

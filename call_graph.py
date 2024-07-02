@@ -3,6 +3,7 @@ import os
 import json
 import argparse
 import clang.cindex
+import graphviz
 import utils
 
 FUNCTION_GRAPH_DB_JSON = "function_graph_db.json"
@@ -10,9 +11,10 @@ FUNCTION_GRAPH_DB_JSON = "function_graph_db.json"
 # location = "file:line" of the declaration, cannot use definition because the def can be in other translation unit
 symbol_dict = {} # "location": {"name": symbol_name, "has_template_callee": bool}
 call_dict = {} # "caller_location": ["callee_1_location", "callee_2_location", ...]
+location_dic = {} # function_name: ["location1", "location1"]
 
 def register_func(node: clang.cindex.Cursor, has_template_callee: bool = False):
-    global symbol_dict
+    global symbol_dict, location_dic
     # node = node.get_definition()
     if not node or node.kind not in [clang.cindex.CursorKind.CXX_METHOD, clang.cindex.CursorKind.FUNCTION_DECL, clang.cindex.CursorKind.FUNCTION_TEMPLATE]:
         print(node.spelling)
@@ -39,8 +41,11 @@ def register_func(node: clang.cindex.Cursor, has_template_callee: bool = False):
 
     sym_name = f"{return_type} {sym_name}({get_param_list(node)})"
 
-    # symbol_dict[loc] = {"name": sym_name, "type": node.type.spelling}
     symbol_dict[loc] = {"name": sym_name, "has_template_callee": has_template_callee}
+
+    if sym_name not in location_dic:
+        location_dic[sym_name] = []
+    location_dic[sym_name].append(loc)
 
     return loc
 
@@ -157,7 +162,7 @@ def parse_file(filename, index):
 
 
 def generate_function_dict(dir: str):
-    global symbol_dict, call_dict
+    global symbol_dict, call_dict, location_dic
 
     full_json_db_path = os.path.join(dir, FUNCTION_GRAPH_DB_JSON)
 
@@ -170,6 +175,7 @@ def generate_function_dict(dir: str):
             db = json.load(fd)
             symbol_dict = db["symbol_dict"]
             call_dict = db["call_dict"]
+            location_dic = db["location_dic"]
             return
 
     src_files = utils.parse_compile_options(dir, args)
@@ -196,35 +202,132 @@ def generate_function_dict(dir: str):
     if not parse_error:
         utils.verbal(args, "saving parse output to", full_json_db_path)
         with open(full_json_db_path, 'w') as fd:
-            json.dump({"symbol_dict": symbol_dict, "call_dict": call_dict}, fd)
+            json.dump({"symbol_dict": symbol_dict, "call_dict": call_dict, "location_dic": location_dic}, fd)
 
     return
 
 def main(dir: str):
-    global symbol_dict, call_dict, project_dir
+    global symbol_dict, call_dict, location_dic, project_dir
 
     project_dir = os.path.abspath(dir)
 
     utils.verbal(args, "workspace path:", project_dir)
     generate_function_dict(dir)
     query = args.functions
+    query_symbol = utils.search_query(list(location_dic.keys()), query)
+    utils.verbal(args, "matched symbols:", query_symbol)
+    query_loc = []
+    for q in query_symbol:
+        query_loc.extend(location_dic[q])
+
+    # TODO: implement tree_report
+
     # if args.tree:
     #     utils.tree_report(call_dict, query, args)
     # else:
     #     utils.graph_report(call_dict, query, "class_graph", args, {})
+    graph_report(call_dict, query_loc, "call_graph")
+
+
+######################################################################################################################################
+# FIXME: refactor
+# temporarily provide an implementation of graph_report, will refactor and move to utils.py later
+######################################################################################################################################
+
+def graph_report(call_dict: dict, query: list, out_file: str):
+    global args, symbol_dict
+    dot = graphviz.Digraph()
+    dot.node_attr["shape"] = "box"
+    dot.node_attr["style"] = "rounded"
+    inserted = {}
+
+    if args.functions and not query:
+        print("no symbol found for ", args.functions)
+        print("consider using wildcard")
+        return
+
+    reserve_dict = utils.find_descendants(call_dict)
+
+    for node in query:
+        if (node in call_dict and call_dict[node]) or (node in reserve_dict and reserve_dict[node]):
+            # avoid standalone node
+            insert_node_to_dot(dot, node, inserted, style="filled, rounded", fillcolor="turquoise")
+
+    if not query:
+        # print all nodes and edges
+        generate_graph(None, call_dict, call_dict.keys(), dot, inserted, args)
+    else:
+        generate_graph(reserve_dict, call_dict, query, dot, inserted, args)
+
+    dot.render(out_file, format='pdf')
+    print("use https://dreampuf.github.io/GraphvizOnline/ to view graph")
+    print(f"graph file is at ./{out_file}")
+
+def generate_graph(parent_dict: dict, child_dict: dict, nodes: list, dot: graphviz.Digraph, inserted: dict, args):
+    if isinstance(nodes, str):
+        nodes = [nodes]
+
+    for curr_node in nodes:
+        # travese towards up
+        if parent_dict and args.up:
+            for other_node in parent_dict.get(curr_node, []):
+                edge_key = f"{other_node}->{curr_node}"
+                if edge_key in inserted:
+                    continue
+
+                insert_to_dot(dot, other_node, curr_node, edge_key, inserted)
+                if args.connected:
+                    generate_graph(parent_dict, child_dict, other_node, dot, inserted, args)
+                else:
+                    # don't need the child of the parent
+                    generate_graph(parent_dict, None, other_node, dot, inserted, args)
+
+        # travese towards down
+        if child_dict and args.down:
+            for other_node in child_dict.get(curr_node, []):
+                edge_key = f"{curr_node}->{other_node}"
+                if edge_key in inserted:
+                    continue
+
+                insert_to_dot(dot, curr_node, other_node, edge_key, inserted)
+                if args.connected:
+                    generate_graph(parent_dict, child_dict, other_node, dot, inserted, args)
+                else:
+                    # don't need the parent of the child
+                    generate_graph(None, child_dict, other_node, dot, inserted, args)
+
+def insert_to_dot(dot: graphviz.Digraph, src: str, dest: str, edge_key: str, inserted: dict, **attrs):
+    src_name = insert_node_to_dot(dot, src, inserted)
+    dest_name = insert_node_to_dot(dot, dest, inserted)
+    inserted[edge_key] = True
+    dot.edge(src_name, dest_name, **attrs)
+
+def insert_node_to_dot(dot: graphviz.Digraph, node: str, inserted: dict, **attrs) -> str:
+    global symbol_dict
+    node_name = node.replace(":", "#")
+    label = symbol_dict[node]["name"]
+    if node not in inserted:
+        dot.node(node_name, label, tooltip=node, **attrs)
+    inserted[node] = True
+    return node_name
+
+
+######################################################################################################################################
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='generate the inheritance hierarchy')
     parser.add_argument('--rebuild', action='store_true', help="regenerate the json database, use when source code is modify")
     parser.add_argument('--compile_db', metavar="compile_commands.json", help="JSON Compilation Database in Clang Format, will attempt to use ./compile_commands.json when not provided")
     parser.add_argument('--path', help="path to workspace root, defult is current directory")
-    parser.add_argument('--tree', action='store_true', help="output in tree view instead of graph view")
+    # parser.add_argument('--tree', action='store_true', help="output in tree view instead of graph view")
     parser.add_argument('--excl', action='append', help="file or directory names to be excluded, support glob, support multiple --excl")
     parser.add_argument('-v', '--verbal', action='store_true', help="turn on verbel printouts")
-    # parser.add_argument('-b', '--base', action='store_true', help="only print the ancestor classes")
-    # parser.add_argument('-d', '--derived', action='store_true', help="only print the descendant classes")
-    # parser.add_argument('-r', '--related', action='store_true', help="print both the ancestor and descendant classes, this is the default")
-    # parser.add_argument('-c', '--connected', '--all', action='store_true', help="print all classes that are connected to any of the ancestor and descendant classes, only available in graph report")
+
+    parser.add_argument('-u', '--up', action='store_true', help="only find the callers (and their callers)")
+    parser.add_argument('-d', '--down', action='store_true', help="only find the callees (and their callees)")
+    parser.add_argument('-r', '--related', action='store_true', help="find both the callers and the callees, this is the default")
+    parser.add_argument('-c', '--connected', '--all', action='store_true', help="find all connected nodes in the call graph, includes for example, other callees of the caller (sibling nodes), only available in graph report")
 
     parser.add_argument('functions', nargs='*', help="name(s) of the querying functions")
 
@@ -233,18 +336,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # FIXME: remove test code
-    # the compile_commands.json currently only use c1.cpp
-    print("WARNING: using hard-coded path for compile_commands.json")
-    args.path = "test/call_graph"
+    # print("WARNING: using hard-coded path for compile_commands.json")
+    # args.path = "test/call_graph"
     # args.compile_db = "compile_commands.json"
 
-
-    # process --derived vs --base vs --related, use --related as default
-    # if args.derived == False and args.base == False:
-    #     args.related = True
-    # if args.related == True or args.connected == True:
-    #     args.base = True
-    #     args.derived = True
+    if args.down == False and args.up == False:
+        args.related = True
+    if args.related == True or args.connected == True:
+        args.up = True
+        args.down = True
 
     if not args.path:
         args.path = os.getcwd() # Use the current directory if no argument is provided
