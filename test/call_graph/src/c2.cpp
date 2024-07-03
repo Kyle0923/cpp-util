@@ -1,7 +1,6 @@
-#include <string>
 #include "header.hpp"
 
-static std::string my_str = "TEST";
+std::string my_str = "TEST";
 
 int Foo::func1(){
     if (true)

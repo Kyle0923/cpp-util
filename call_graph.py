@@ -15,9 +15,10 @@ location_dic = {} # function_name: ["location1", "location1"]
 
 def register_func(node: clang.cindex.Cursor, has_template_callee: bool = False):
     global symbol_dict, location_dic
-    # node = node.get_definition()
-    if not node or node.kind not in [clang.cindex.CursorKind.CXX_METHOD, clang.cindex.CursorKind.FUNCTION_DECL, clang.cindex.CursorKind.FUNCTION_TEMPLATE]:
-        print(node.spelling)
+    if node.kind not in [clang.cindex.CursorKind.CXX_METHOD, clang.cindex.CursorKind.FUNCTION_DECL, \
+                                     clang.cindex.CursorKind.FUNCTION_TEMPLATE, clang.cindex.CursorKind.CONSTRUCTOR, \
+                                     clang.cindex.CursorKind.CONVERSION_FUNCTION]:
+        print(node.spelling, node.kind)
         raise ("wrong kind")
     loc = utils.get_symbol_decl_loc_from_def(node)
     if loc in symbol_dict:
@@ -104,9 +105,16 @@ def process_ast(cursor: clang.cindex.Cursor):
             if not child.kind == clang.cindex.CursorKind.CALL_EXPR:
                 continue
 
-            if child.type.kind != clang.cindex.TypeKind.DEPENDENT:
+            if child.type.kind == clang.cindex.TypeKind.DEPENDENT:
+                # template function
+                register_func(node, True) # set flag `has_template_callee` to True
+            else:
+                if not child.get_definition() and not child.referenced:
+                    # functions defined in other translation unit has no .get_definition() but has .referenced
+                    # some other CALL_EXPR nodes has neither, these are usually compiler generated intermediate CALL_EXPR
+                    continue
                 # normal function
-                if (child.get_definition() and child.get_definition().is_default_method()):
+                if child.get_definition() and child.get_definition().is_default_method():
                     # compiler-provided methods such as default ctor, copy/move ctor, ...
                     continue
                 callee_loc = register_func(child.referenced)
@@ -116,9 +124,6 @@ def process_ast(cursor: clang.cindex.Cursor):
                     # the loc of the callees in the instantiated template will point to the correct tempaltes
                     # including (partical) specialization
                     process_ast(child.get_definition())
-            else:
-                # template function
-                register_func(node, True) # set flag `has_template_callee` to True
 
         callee = list(callee.keys())
         if caller_loc not in call_dict:
@@ -338,7 +343,7 @@ if __name__ == "__main__":
     # FIXME: remove test code
     # print("WARNING: using hard-coded path for compile_commands.json")
     # args.path = "test/call_graph"
-    # args.compile_db = "compile_commands.json"
+    # args.rebuild = True
 
     if args.down == False and args.up == False:
         args.related = True

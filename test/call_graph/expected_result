@@ -1,0 +1,56 @@
+digraph {
+	node [shape=box style=rounded]
+	"/home/user/programming/cpp-util/test/call_graph/src/header.hpp#20" [label="U Foo::func2<U>(U b)" tooltip="/home/user/programming/cpp-util/test/call_graph/src/header.hpp:20"]
+	"/home/user/programming/cpp-util/test/call_graph/src/header.hpp#17" [label="U func2_impl<U>(U b)" tooltip="/home/user/programming/cpp-util/test/call_graph/src/header.hpp:17"]
+	"/home/user/programming/cpp-util/test/call_graph/src/header.hpp#20" -> "/home/user/programming/cpp-util/test/call_graph/src/header.hpp#17"
+	"/home/user/programming/cpp-util/test/call_graph/src/header.hpp#27" [label="T Bar<T>::func2(T a)" tooltip="/home/user/programming/cpp-util/test/call_graph/src/header.hpp:27"]
+	"/home/user/programming/cpp-util/test/call_graph/src/header.hpp#26" [label="T Bar<T>::func1(T a)" tooltip="/home/user/programming/cpp-util/test/call_graph/src/header.hpp:26"]
+	"/home/user/programming/cpp-util/test/call_graph/src/header.hpp#27" -> "/home/user/programming/cpp-util/test/call_graph/src/header.hpp#26"
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#6" [label="std::string get_str()" tooltip="/home/user/programming/cpp-util/test/call_graph/src/c1.cpp:6"]
+	"/../lib/gcc/x86_64-linux-gnu/11/../../../../include/c++/11/bits/basic_string.h#456" [label="void basic_string::basic_string(const std::basic_string<char> & __str)" tooltip="/../lib/gcc/x86_64-linux-gnu/11/../../../../include/c++/11/bits/basic_string.h:456"]
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#6" -> "/../lib/gcc/x86_64-linux-gnu/11/../../../../include/c++/11/bits/basic_string.h#456"
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#7" [label="std::string & get_str_ref()" tooltip="/home/user/programming/cpp-util/test/call_graph/src/c1.cpp:7"]
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#6" -> "/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#7"
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#32" [label="MyOperatorClass MyOperatorClass::operator++(int)" tooltip="/home/user/programming/cpp-util/test/call_graph/src/c1.cpp:32"]
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#26" [label="MyOperatorClass & MyOperatorClass::operator++()" tooltip="/home/user/programming/cpp-util/test/call_graph/src/c1.cpp:26"]
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#32" -> "/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#26"
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#70" [label="MyOperatorClass MyOperatorClass::operator+(const MyOperatorClass & other)" tooltip="/home/user/programming/cpp-util/test/call_graph/src/c1.cpp:70"]
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#23" [label="void MyOperatorClass::MyOperatorClass(int v)" tooltip="/home/user/programming/cpp-util/test/call_graph/src/c1.cpp:23"]
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#70" -> "/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#23"
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#75" [label="std::ostream & operator<<(std::ostream & os, const MyOperatorClass & obj)" tooltip="/home/user/programming/cpp-util/test/call_graph/src/c1.cpp:75"]
+	"/../lib/gcc/x86_64-linux-gnu/11/../../../../include/c++/11/ostream#189" [label="std::basic_ostream<char>::__ostream_type & basic_ostream::operator<<(int __n)" tooltip="/../lib/gcc/x86_64-linux-gnu/11/../../../../include/c++/11/ostream:189"]
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#75" -> "/../lib/gcc/x86_64-linux-gnu/11/../../../../include/c++/11/ostream#189"
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#81" [label="int main()" tooltip="/home/user/programming/cpp-util/test/call_graph/src/c1.cpp:81"]
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#81" -> "/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#23"
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#45" [label="int MyOperatorClass::operator int()" tooltip="/home/user/programming/cpp-util/test/call_graph/src/c1.cpp:45"]
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#81" -> "/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#45"
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#81" -> "/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#32"
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#39" [label="MyOperatorClass & MyOperatorClass::operator+=(int v)" tooltip="/home/user/programming/cpp-util/test/call_graph/src/c1.cpp:39"]
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#81" -> "/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#39"
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#81" -> "/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#70"
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#55" [label="bool MyOperatorClass::operator<(const MyOperatorClass & other)" tooltip="/home/user/programming/cpp-util/test/call_graph/src/c1.cpp:55"]
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#81" -> "/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#55"
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#60" [label="bool MyOperatorClass::operator==(const MyOperatorClass & other)" tooltip="/home/user/programming/cpp-util/test/call_graph/src/c1.cpp:60"]
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#81" -> "/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#60"
+	"/../lib/gcc/x86_64-linux-gnu/11/../../../../include/c++/11/ostream#108" [label="std::basic_ostream<char>::__ostream_type & basic_ostream::operator<<(std::basic_ostream<char>::__ostream_type &(*)(std::basic_ostream<char>::__ostream_type &) __pf)" tooltip="/../lib/gcc/x86_64-linux-gnu/11/../../../../include/c++/11/ostream:108"]
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#81" -> "/../lib/gcc/x86_64-linux-gnu/11/../../../../include/c++/11/ostream#108"
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#81" -> "/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#75"
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#65" [label="int MyOperatorClass::operator[](int)" tooltip="/home/user/programming/cpp-util/test/call_graph/src/c1.cpp:65"]
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#81" -> "/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#65"
+	"/home/user/programming/cpp-util/test/call_graph/src/header.hpp#8" [label="int Foo::func1()" tooltip="/home/user/programming/cpp-util/test/call_graph/src/header.hpp:8"]
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#81" -> "/home/user/programming/cpp-util/test/call_graph/src/header.hpp#8"
+	"/home/user/programming/cpp-util/test/call_graph/src/header.hpp#9" [label="int Foo::func2(int)" tooltip="/home/user/programming/cpp-util/test/call_graph/src/header.hpp:9"]
+	"/home/user/programming/cpp-util/test/call_graph/src/header.hpp#8" -> "/home/user/programming/cpp-util/test/call_graph/src/header.hpp#9"
+	"/home/user/programming/cpp-util/test/call_graph/src/header.hpp#9" -> "/home/user/programming/cpp-util/test/call_graph/src/header.hpp#8"
+	"/../lib/gcc/x86_64-linux-gnu/11/../../../../include/c++/11/bits/basic_string.h#926" [label="std::basic_string<char>::size_type basic_string::length()" tooltip="/../lib/gcc/x86_64-linux-gnu/11/../../../../include/c++/11/bits/basic_string.h:926"]
+	"/home/user/programming/cpp-util/test/call_graph/src/header.hpp#8" -> "/../lib/gcc/x86_64-linux-gnu/11/../../../../include/c++/11/bits/basic_string.h#926"
+	"/home/user/programming/cpp-util/test/call_graph/src/header.hpp#9" -> "/home/user/programming/cpp-util/test/call_graph/src/header.hpp#9"
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#81" -> "/home/user/programming/cpp-util/test/call_graph/src/header.hpp#9"
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#81" -> "/home/user/programming/cpp-util/test/call_graph/src/header.hpp#20"
+	"/home/user/programming/cpp-util/test/call_graph/src/header.hpp#12" [label="int Foo::func4(int a, int b)" tooltip="/home/user/programming/cpp-util/test/call_graph/src/header.hpp:12"]
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#81" -> "/home/user/programming/cpp-util/test/call_graph/src/header.hpp#12"
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#81" -> "/home/user/programming/cpp-util/test/call_graph/src/header.hpp#27"
+	"/home/user/programming/cpp-util/test/call_graph/src/header.hpp#13" [label="int Foo::func5()" tooltip="/home/user/programming/cpp-util/test/call_graph/src/header.hpp:13"]
+	"/home/user/programming/cpp-util/test/call_graph/src/c1.cpp#81" -> "/home/user/programming/cpp-util/test/call_graph/src/header.hpp#13"
+	"/home/user/programming/cpp-util/test/call_graph/src/header.hpp#13" -> "/home/user/programming/cpp-util/test/call_graph/src/header.hpp#12"
+}

@@ -226,7 +226,7 @@ def print_ast(node, level=0):
 def to_string(node) -> str:
     loc_str = get_symbol_loc(node)
     return f'S: {node.spelling}, K: {node.kind}, PS: {node.semantic_parent.spelling if node.semantic_parent else ""},' + \
-            f'L: {loc_str}, T: {node.type.kind.spelling}, #T: {node.type.get_num_template_arguments()}'
+            f'L: {loc_str}, T: {node.type.spelling}, TK: {node.type.kind.spelling}, #T: {node.type.get_num_template_arguments()}'
 
 def get_symbol_loc(node) -> str:
     loc = f"{node.location.file.name}:{node.location.line}" if node.location.file else ""
