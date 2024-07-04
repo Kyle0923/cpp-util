@@ -84,7 +84,7 @@ def get_param_list(node: clang.cindex.Cursor):
             params.append(f"{param_type} {param_name}".strip())
     elif node.kind == clang.cindex.CursorKind.VAR_DECL:
         # function pointer
-        for param in node.type.get_pointee().argument_types():
+        for param in node.type.get_canonical().get_pointee().argument_types():
             param_type = replace_lambda_type(param)
             params.append( param_type.strip() )
     else:
@@ -105,11 +105,9 @@ def is_lambda(node: clang.cindex.Cursor):
     return typename.startswith("(lambda at")
 
 def get_lambda_name(node: clang.cindex.Cursor):
-    typename = node.spelling
-    suffix = typename.split(')')[-1].strip()
-    if suffix:
-        suffix = f" {suffix}"
-    location = typename.split('at')[1].strip()
+    typename = node.spelling # e.g., "(lambda at /file/foo.cpp:10:2) &&"
+    suffix = typename.split(')')[-1]
+    location = typename.split('at', 1)[1].strip()
     file, line, _ = location.split(':')
     file = os.path.basename(file)
     param_type = f"(lambda@{file}:{line}){suffix}"
