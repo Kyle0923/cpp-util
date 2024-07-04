@@ -38,7 +38,12 @@ def register_func(node: clang.cindex.Cursor, has_template_callee: bool = False):
         template = get_template_type_list(parent)
         sym_name = f"{parent.spelling}<{template}>::{sym_name}"
 
-    return_type = node.type.get_result().spelling
+    if node.kind == clang.cindex.CursorKind.VAR_DECL:
+        # function pointer
+        return_type = node.type.get_pointee().get_result().spelling
+        sym_name = f"(*{sym_name})"
+    else:
+        return_type = node.type.get_result().spelling
 
     sym_name = f"{return_type} {sym_name}({get_param_list(node)})"
 
@@ -74,15 +79,41 @@ def get_param_list(node: clang.cindex.Cursor):
             for grandchild in child.get_children():
                 if grandchild.kind != clang.cindex.CursorKind.TYPE_REF:
                     continue
-                param_type = grandchild.spelling
+                param_type = replace_lambda_type(grandchild)
                 break
             params.append(f"{param_type} {param_name}".strip())
+    elif node.kind == clang.cindex.CursorKind.VAR_DECL:
+        # function pointer
+        for param in node.type.get_pointee().argument_types():
+            param_type = replace_lambda_type(param)
+            params.append( param_type.strip() )
     else:
         for param in node.get_arguments():
-            params.append( (param.type.spelling + " " + param.spelling).strip() )
+            param_type = replace_lambda_type(param.type)
+            params.append( (param_type + " " + param.spelling).strip() )
 
     param_str = ", ".join(params)
     return param_str
+
+def replace_lambda_type(node: clang.cindex.Cursor):
+    if is_lambda(node):
+        return get_lambda_name(node)
+    return node.spelling
+
+def is_lambda(node: clang.cindex.Cursor):
+    typename = node.spelling
+    return typename.startswith("(lambda at")
+
+def get_lambda_name(node: clang.cindex.Cursor):
+    typename = node.spelling
+    suffix = typename.split(')')[-1].strip()
+    if suffix:
+        suffix = f" {suffix}"
+    location = typename.split('at')[1].strip()
+    file, line, _ = location.split(':')
+    file = os.path.basename(file)
+    param_type = f"(lambda@{file}:{line}){suffix}"
+    return param_type
 
 def process_ast(cursor: clang.cindex.Cursor):
     global symbol_dict, call_dict, project_dir
@@ -116,6 +147,12 @@ def process_ast(cursor: clang.cindex.Cursor):
                 # normal function
                 if child.get_definition() and child.get_definition().is_default_method():
                     # compiler-provided methods such as default ctor, copy/move ctor, ...
+                    continue
+                if child.referenced.kind == clang.cindex.CursorKind.CONVERSION_FUNCTION:
+                    # conversion (casting) functions such as `operator int()` usually don't provide much useful information
+                    # about the call flow. Also for lambdas and function pointers, the function signatures are very hard to read
+                    # e.g., `int (*ptr)(void) = []() {return 0;}` will invoke a conversion function `int (*)() ::operator int (*)()()`
+                    # so we ignore them
                     continue
                 callee_loc = register_func(child.referenced)
                 if callee_loc not in callee:
@@ -266,7 +303,7 @@ def graph_report(call_dict: dict, query: list, out_file: str):
         generate_graph(reserve_dict, call_dict, query, dot, inserted, args)
 
     dot.render(out_file, format='pdf')
-    print("use https://dreampuf.github.io/GraphvizOnline/ to view graph")
+    print("use https://www.devtoolsdaily.com/graphviz to view graph")
     print(f"graph file is at ./{out_file}")
 
 def generate_graph(parent_dict: dict, child_dict: dict, nodes: list, dot: graphviz.Digraph, inserted: dict, args):
@@ -343,7 +380,7 @@ if __name__ == "__main__":
 
     # FIXME: remove test code
     # print("WARNING: using hard-coded path for compile_commands.json")
-    # args.path = "test/call_graph"
+    # args.path = "test/call_graph_lambda"
     # args.rebuild = True
 
     if args.down == False and args.up == False:
