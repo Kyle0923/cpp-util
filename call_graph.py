@@ -40,10 +40,10 @@ def register_func(node: clang.cindex.Cursor, has_template_callee: bool = False):
 
     if node.kind == clang.cindex.CursorKind.VAR_DECL:
         # function pointer
-        return_type = node.type.get_pointee().get_result().spelling
+        return_type = replace_lambda_name(node.type.get_pointee().get_result().spelling)
         sym_name = f"(*{sym_name})"
     else:
-        return_type = node.type.get_result().spelling
+        return_type = replace_lambda_name(node.type.get_result().spelling)
 
     sym_name = f"{return_type} {sym_name}({get_param_list(node)})"
 
@@ -79,33 +79,32 @@ def get_param_list(node: clang.cindex.Cursor):
             for grandchild in child.get_children():
                 if grandchild.kind != clang.cindex.CursorKind.TYPE_REF:
                     continue
-                param_type = replace_lambda_type(grandchild)
+                param_type = replace_lambda_name(grandchild.spelling)
                 break
             params.append(f"{param_type} {param_name}".strip())
     elif node.kind == clang.cindex.CursorKind.VAR_DECL:
         # function pointer
         for param in node.type.get_canonical().get_pointee().argument_types():
-            param_type = replace_lambda_type(param)
+            param_type = replace_lambda_name(param.spelling)
             params.append( param_type.strip() )
     else:
         for param in node.get_arguments():
-            param_type = replace_lambda_type(param.type)
+            param_type = replace_lambda_name(param.type.spelling)
             params.append( (param_type + " " + param.spelling).strip() )
 
     param_str = ", ".join(params)
     return param_str
 
-def replace_lambda_type(node: clang.cindex.Cursor):
-    if is_lambda(node):
-        return get_lambda_name(node)
-    return node.spelling
+def replace_lambda_name(typename: str):
+    if is_lambda(typename):
+        return trim_lambda_name(typename)
+    return typename
 
-def is_lambda(node: clang.cindex.Cursor):
-    typename = node.spelling
+def is_lambda(typename: str):
     return typename.startswith("(lambda at")
 
-def get_lambda_name(node: clang.cindex.Cursor):
-    typename = node.spelling # e.g., "(lambda at /file/foo.cpp:10:2) &&"
+def trim_lambda_name(typename: str):
+    # e.g., "(lambda at /file/foo.cpp:10:2) &&"
     suffix = typename.split(')')[-1]
     location = typename.split('at', 1)[1].strip()
     file, line, _ = location.split(':')
