@@ -1,0 +1,14 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/g++",
+      "-c",
+      "-o",
+      "main.o",
+      "main.cpp"
+    ],
+    "directory": "/home/user/programming/cpp-util/test/call_graph_template",
+    "file": "/home/user/programming/cpp-util/test/call_graph_template/main.cpp",
+    "output": "/home/user/programming/cpp-util/test/call_graph_template/main.o"
+  }
+]
