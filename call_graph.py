@@ -167,8 +167,10 @@ def trim_lambda_name(typename: str):
 
 def process_ast(cursor: clang.cindex.Cursor):
     global symbol_dict, call_dict, project_dir
+    # TODO: replace walk_preorder with a self implement preorder traversal to avoid repetition
+    # use a stack, if is_not_func, push children, if is_func, register(func) and do not push children
     for node in cursor.walk_preorder():
-        if node.kind not in [clang.cindex.CursorKind.CXX_METHOD, clang.cindex.CursorKind.FUNCTION_DECL, clang.cindex.CursorKind.FUNCTION_TEMPLATE, clang.cindex.CursorKind.CONSTRUCTOR]:
+        if node.kind not in [clang.cindex.CursorKind.CXX_METHOD, clang.cindex.CursorKind.FUNCTION_DECL, clang.cindex.CursorKind.CONSTRUCTOR]:
             continue
         if not utils.is_project_defined_symbol(node, project_dir):
             continue
