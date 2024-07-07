@@ -1,7 +1,6 @@
 
-SRC := src/c1.cpp src/c2.cpp
+SRC := variadic.cpp
 OBJ := $(SRC:.cpp=.o)
-# INC := -Iinc1/ -Iinc2/
 
 ARTIFACT := main
 

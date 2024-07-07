@@ -9,56 +9,71 @@ import utils
 FUNCTION_GRAPH_DB_JSON = "function_graph_db.json"
 
 # location = "file:line" of the declaration, cannot use definition because the def can be in other translation unit
-symbol_dict = {} # "location": {"name": symbol_name, "has_template_callee": bool}
-call_dict = {} # "caller_location": ["callee_1_location", "callee_2_location", ...]
-location_dic = {} # function_name: ["location1", "location1"]
+symbol_dict = {} # "unique_id": {"name": symbol_name, "has_template_callee": bool}
+call_dict = {} # "unique_id": ["callee_1_id", "callee_2_id", ...]
+unique_id_dict = {} # function_name: ["unique_id1", "unique_id2"]
 
 def register_func(node: clang.cindex.Cursor, has_template_callee: bool = False):
-    global symbol_dict, location_dic
+    global symbol_dict, unique_id_dict
     if node.kind not in [clang.cindex.CursorKind.CXX_METHOD, clang.cindex.CursorKind.FUNCTION_DECL, \
-                                     clang.cindex.CursorKind.FUNCTION_TEMPLATE, clang.cindex.CursorKind.CONSTRUCTOR, \
-                                     clang.cindex.CursorKind.CONVERSION_FUNCTION, clang.cindex.CursorKind.VAR_DECL]:
-        print(node.spelling, node.kind)
-        raise ("wrong kind")
-    loc = utils.get_symbol_decl_loc_from_def(node)
-    if loc in symbol_dict:
+                         clang.cindex.CursorKind.FUNCTION_TEMPLATE, clang.cindex.CursorKind.CONSTRUCTOR, \
+                         clang.cindex.CursorKind.CONVERSION_FUNCTION, clang.cindex.CursorKind.VAR_DECL, \
+                         clang.cindex.CursorKind.TEMPLATE_NON_TYPE_PARAMETER]:
+        raise ValueError(f"wrong node: {node.spelling}, {node.kind}")
+    unique_id = node.get_usr()
+    if unique_id in symbol_dict:
         # has_template_callee == True means further process is needed when this function is called
-        symbol_dict[loc]["has_template_callee"] |= has_template_callee
-        return loc
+        symbol_dict[unique_id]["has_template_callee"] |= has_template_callee
+        return unique_id
 
     sym_name = node.spelling
     if node.kind == clang.cindex.CursorKind.FUNCTION_TEMPLATE:
-        template = get_template_type_list(node)
-        sym_name = f"{sym_name}<{template}>"
+        template = get_template_list_from_declaration(node)
+        sym_name = f"{sym_name}{template}"
+
+    if node.kind == clang.cindex.CursorKind.FUNCTION_DECL:
+        # TODO: what if func_ptr points to a template function
+        # TODO: provide template info for other function kinds
+        template = get_template_list_from_instantiation(node)
+        sym_name = f"{sym_name}{template}"
 
     parent = node.semantic_parent
     if parent.kind in [clang.cindex.CursorKind.CLASS_DECL, clang.cindex.CursorKind.STRUCT_DECL]:
-        sym_name = f"{parent.spelling}::{sym_name}"
+        sym_name = f"{parent.type.spelling}::{sym_name}"
     elif parent.kind == clang.cindex.CursorKind.CLASS_TEMPLATE:
-        template = get_template_type_list(parent)
-        sym_name = f"{parent.spelling}<{template}>::{sym_name}"
+        template = get_template_list_from_declaration(parent)
+        sym_name = f"{parent.spelling}{template}::{sym_name}"
 
-    if node.kind == clang.cindex.CursorKind.VAR_DECL:
-        # function pointer
-        return_type = replace_lambda_name(node.type.get_pointee().get_result().spelling)
-        sym_name = f"(*{sym_name})"
-    else:
-        return_type = replace_lambda_name(node.type.get_result().spelling)
+    if node.kind != clang.cindex.CursorKind.CONSTRUCTOR:
+        if node.kind == clang.cindex.CursorKind.VAR_DECL:
+            # function pointer
+            return_type = replace_lambda_name(node.type.get_pointee().get_result().spelling)
+            sym_name = f"(*{sym_name})"
+        else:
+            return_type = replace_lambda_name(node.type.get_result().spelling)
+        sym_name = f"{return_type} {sym_name}"
 
-    sym_name = f"{return_type} {sym_name}({get_param_list(node)})"
+    sym_name = f"{sym_name}({get_param_list(node)})"
 
-    symbol_dict[loc] = {"name": sym_name, "has_template_callee": has_template_callee}
+    loc = utils.get_symbol_decl_loc_from_def(node)
 
-    if sym_name not in location_dic:
-        location_dic[sym_name] = []
-    location_dic[sym_name].append(loc)
+    symbol_dict[unique_id] = {"name": sym_name, "has_template_callee": has_template_callee, "loc": loc}
 
-    return loc
+    if sym_name not in unique_id_dict:
+        unique_id_dict[sym_name] = []
+    unique_id_dict[sym_name].append(unique_id)
 
-def get_template_type_list(node: clang.cindex.Cursor):
+    if node.kind != clang.cindex.CursorKind.FUNCTION_TEMPLATE:
+        process_ast(node)
+
+    return unique_id
+
+# this is used to parse the declaration AST to gather the original template arguments
+# only use for non-member functions
+# e.g., template <typename T, int N> void func(int a) => returns <T, int>
+def get_template_list_from_declaration(node: clang.cindex.Cursor):
     if node.kind not in [clang.cindex.CursorKind.CLASS_TEMPLATE, clang.cindex.CursorKind.FUNCTION_TEMPLATE]:
-        print("wrong node: ", node.spelling)
-        raise
+        raise ValueError(f"wrong node: {node.spelling}")
     template_types = []
     for child in node.get_children():
         if child.kind == clang.cindex.CursorKind.TEMPLATE_TYPE_PARAMETER:
@@ -66,7 +81,45 @@ def get_template_type_list(node: clang.cindex.Cursor):
         elif child.kind == clang.cindex.CursorKind.TEMPLATE_NON_TYPE_PARAMETER:
             template_types.append(child.type.spelling)
 
-    return ", ".join(template_types)
+    return "<" + (", ".join(template_types)) + ">"
+
+# this is used to gather the actual template arguments that are used for instantiation
+# e.g., func<int, 1>(); => returns <int, 1>
+def get_template_list_from_instantiation(node):
+    if node.type.kind != clang.cindex.TypeKind.FUNCTIONPROTO:
+        raise ValueError(f"wrong node: {node.spelling}")
+    template_args = []
+
+    for idx in range(0, node.get_num_template_arguments()):
+        node_kind = None
+        try:
+            # clang will throw on variadic templates
+            node_kind = node.get_template_argument_kind(idx)
+        except:
+            continue
+
+        if node_kind == clang.cindex.TemplateArgumentKind.TYPE:
+            type_name = node.get_template_argument_type(idx).spelling
+            if is_lambda(type_name):
+                template_args.append("(lambda)")
+            else:
+                template_args.append(node.get_template_argument_type(idx).spelling)
+        elif node_kind == clang.cindex.TemplateArgumentKind.INTEGRAL:
+            template_args.append( str(node.get_template_argument_value(idx)) )
+        elif node_kind in [clang.cindex.TemplateArgumentKind.NULL, clang.cindex.TemplateArgumentKind.NULLPTR]:
+            continue
+        else:
+            # ref: https://github.com/llvm-mirror/clang/blob/aa231e4be75ac4759c236b755c57876f76e3cf05/bindings/python/clang/cindex.py#L1383
+            # the last kind is DECLARATION meaning the template arg is an pointer or reference to some object
+            continue
+
+    if template_args:
+        return "<" + (", ".join(template_args)) + ">"
+    elif node.get_num_template_arguments() > 0:
+        # template args contains only NULL, NULLPTR, or DECLARATION
+        return "<>"
+    else:
+        return ""
 
 def get_param_list(node: clang.cindex.Cursor):
     params = []
@@ -115,12 +168,12 @@ def trim_lambda_name(typename: str):
 def process_ast(cursor: clang.cindex.Cursor):
     global symbol_dict, call_dict, project_dir
     for node in cursor.walk_preorder():
-        if node.kind not in [clang.cindex.CursorKind.CXX_METHOD, clang.cindex.CursorKind.FUNCTION_DECL, clang.cindex.CursorKind.FUNCTION_TEMPLATE]:
+        if node.kind not in [clang.cindex.CursorKind.CXX_METHOD, clang.cindex.CursorKind.FUNCTION_DECL, clang.cindex.CursorKind.FUNCTION_TEMPLATE, clang.cindex.CursorKind.CONSTRUCTOR]:
             continue
         if not utils.is_project_defined_symbol(node, project_dir):
             continue
-        caller_loc = register_func(node)
-        if caller_loc in call_dict and symbol_dict[caller_loc]["has_template_callee"] == False:
+        caller_id = register_func(node)
+        if caller_id in call_dict and symbol_dict[caller_id]["has_template_callee"] == False:
             continue
         callee = [] # using array can preserve order
         def_node = node.get_definition()
@@ -151,19 +204,14 @@ def process_ast(cursor: clang.cindex.Cursor):
                     # e.g., `int (*ptr)(void) = []() {return 0;}` will invoke a conversion function `int (*)() ::operator int (*)()()`
                     # so we ignore them
                     continue
-                callee_loc = register_func(child.referenced)
-                if callee_loc not in callee:
-                    callee.append(callee_loc)
-                if symbol_dict[callee_loc]["has_template_callee"] == True and child.get_definition():
-                    # child.get_definition() points to the clang-instantiated version of the template function
-                    # the loc of the callees in the instantiated template will point to the correct tempaltes
-                    # including (partical) specialization
-                    process_ast(child.get_definition())
+                callee_id = register_func(child.referenced)
+                if callee_id not in callee:
+                    callee.append(callee_id)
 
-        if caller_loc not in call_dict:
-            call_dict[caller_loc] = callee
+        if caller_id not in call_dict:
+            call_dict[caller_id] = callee
         else:
-            call_dict[caller_loc] += [func for func in callee if func not in call_dict[caller_loc]]
+            call_dict[caller_id] += [func for func in callee if func not in call_dict[caller_id]]
 
     return
 
@@ -201,7 +249,7 @@ def parse_file(filename, index):
 
 
 def generate_function_dict(dir: str):
-    global symbol_dict, call_dict, location_dic
+    global symbol_dict, call_dict, unique_id_dict
 
     full_json_db_path = os.path.join(dir, FUNCTION_GRAPH_DB_JSON)
 
@@ -214,7 +262,7 @@ def generate_function_dict(dir: str):
             db = json.load(fd)
             symbol_dict = db["symbol_dict"]
             call_dict = db["call_dict"]
-            location_dic = db["location_dic"]
+            unique_id_dict = db["unique_id_dict"]
             return
 
     src_files = utils.parse_compile_options(dir, args)
@@ -241,23 +289,23 @@ def generate_function_dict(dir: str):
     if not parse_error:
         utils.verbal(args, "saving parse output to", full_json_db_path)
         with open(full_json_db_path, 'w') as fd:
-            json.dump({"symbol_dict": symbol_dict, "call_dict": call_dict, "location_dic": location_dic}, fd)
+            json.dump({"symbol_dict": symbol_dict, "call_dict": call_dict, "unique_id_dict": unique_id_dict}, fd)
 
     return
 
 def main(dir: str):
-    global symbol_dict, call_dict, location_dic, project_dir
+    global symbol_dict, call_dict, unique_id_dict, project_dir
 
     project_dir = os.path.abspath(dir)
 
     utils.verbal(args, "workspace path:", project_dir)
     generate_function_dict(dir)
     query = args.functions
-    query_symbol = utils.search_query(list(location_dic.keys()), query)
+    query_symbol = utils.search_query(list(unique_id_dict.keys()), query)
     utils.verbal(args, "matched symbols:", query_symbol)
-    query_loc = []
+    query_id = []
     for q in query_symbol:
-        query_loc.extend(location_dic[q])
+        query_id.extend(unique_id_dict[q])
 
     # TODO: implement tree_report
 
@@ -265,7 +313,7 @@ def main(dir: str):
     #     utils.tree_report(call_dict, query, args)
     # else:
     #     utils.graph_report(call_dict, query, "class_graph", args, {})
-    graph_report(call_dict, query_loc, "call_graph")
+    graph_report(call_dict, query_id, "call_graph")
 
 
 ######################################################################################################################################
@@ -344,10 +392,10 @@ def insert_to_dot(dot: graphviz.Digraph, src: str, dest: str, edge_key: str, ins
 
 def insert_node_to_dot(dot: graphviz.Digraph, node: str, inserted: dict, **attrs) -> str:
     global symbol_dict
-    node_name = node.replace(":", "#")
+    node_name = node.replace(":", "~")
     label = symbol_dict[node]["name"]
     if node not in inserted:
-        dot.node(node_name, label, tooltip=node, **attrs)
+        dot.node(node_name, label, tooltip=symbol_dict[node]["loc"], **attrs)
     inserted[node] = True
     return node_name
 
@@ -377,7 +425,7 @@ if __name__ == "__main__":
 
     # FIXME: remove test code
     # print("WARNING: using hard-coded path for compile_commands.json")
-    # args.path = "test/call_graph_lambda"
+    # args.path = "test/call_graph_template" # TODO: void callFunction<>() doesn't have the callee (*Func)()
     # args.rebuild = True
 
     if args.down == False and args.up == False:

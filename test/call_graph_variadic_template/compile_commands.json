@@ -1,0 +1,14 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/g++",
+      "-c",
+      "-o",
+      "variadic.o",
+      "variadic.cpp"
+    ],
+    "directory": "/home/user/programming/cpp-util/test/call_graph_variadic_template",
+    "file": "/home/user/programming/cpp-util/test/call_graph_variadic_template/variadic.cpp",
+    "output": "/home/user/programming/cpp-util/test/call_graph_variadic_template/variadic.o"
+  }
+]
