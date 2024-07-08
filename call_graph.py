@@ -323,7 +323,7 @@ def generate_function_dict(dir: str):
     return
 
 def main(dir: str):
-    global symbol_dict, call_dict, unique_id_dict, project_dir
+    global symbol_dict, call_dict, unique_id_dict, project_dir, args
 
     project_dir = os.path.abspath(dir)
 
@@ -331,6 +331,18 @@ def main(dir: str):
     generate_function_dict(dir)
     query = args.functions
     query_symbol = utils.search_query(list(unique_id_dict.keys()), query)
+    # FIXME: doesn't match `Bar<T>::func1`
+    if args.list:
+        if query:
+            print("query:", query, "matched symbols:", query_symbol)
+        else:
+            print("symbols:")
+            print("==========================")
+            for func in sorted(unique_id_dict.keys()):
+                print(func)
+            print("==========================")
+        exit(0)
+
     utils.verbal(args, "matched symbols:", query_symbol)
     query_id = []
     for q in query_symbol:
@@ -444,7 +456,9 @@ if __name__ == "__main__":
     parser.add_argument('--excl', action='append', help="file or directory names to be excluded, support glob, support multiple --excl")
     parser.add_argument('-v', '--verbal', action='store_true', help="turn on verbel printouts")
 
-    parser.add_argument('-l', '--level', action='store', default=-1, type=int, help="level of traversal in both direction")
+    parser.add_argument('-l', '--list', '--ls', action='store_true', help="list symbols matching the input")
+
+    parser.add_argument('-L', '--level', action='store', default=-1, type=int, help="level of traversal in both direction")
     parser.add_argument('--up-level', '--up-lv', action='store', default=-1, type=int, metavar='LEVEL' , help="level of traversal towards the caller direction")
     parser.add_argument('--down-level', '--down-lv', action='store', default=-1, type=int, metavar='LEVEL' , help="level of traversal towards the callee direction")
 
