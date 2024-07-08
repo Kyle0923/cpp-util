@@ -336,22 +336,20 @@ def break_long_name(name):
     return name
 
 # remove the namespaces
-def trim_namespace(type_name):
+def trim_namespace(symbol_name, preserve_std = True):
     result = ''
     temp_part = ''
 
-    for char in type_name:
-        if char == ' ':
+    for char in symbol_name:
+        if char == ' ' and (temp_part and temp_part[-1] == ' '):
+            # consecutive empty space, ignore
             continue
         temp_part += char
         if char == ':':
-            if temp_part == 'std:' or temp_part == 'std::':
+            if preserve_std and (temp_part == 'std:' or temp_part == 'std::'):
                 continue
             temp_part = ''
-        elif char == '<':
-            result += temp_part
-            temp_part = ''
-        elif char == '>':
+        elif char in ['<', '>', '(', ')', ' ']:
             result += temp_part
             temp_part = ''
         elif char == ',':

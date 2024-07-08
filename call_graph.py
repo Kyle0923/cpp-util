@@ -13,6 +13,8 @@ symbol_dict = {} # "unique_id": {"name": symbol_name, "has_template_callee": boo
 call_dict = {} # "unique_id": ["callee_1_id", "callee_2_id", ...]
 unique_id_dict = {} # function_name: ["unique_id1", "unique_id2"]
 
+MAX_SYMBOL_LENGTH = 100
+
 def register_func(node: clang.cindex.Cursor, has_template_callee: bool = False):
     global symbol_dict, unique_id_dict
     if node.kind not in [clang.cindex.CursorKind.CXX_METHOD, clang.cindex.CursorKind.FUNCTION_DECL, \
@@ -27,41 +29,60 @@ def register_func(node: clang.cindex.Cursor, has_template_callee: bool = False):
         return unique_id
 
     sym_name = node.spelling
-    if node.kind == clang.cindex.CursorKind.FUNCTION_TEMPLATE:
-        template = get_template_list_from_declaration(node)
-        sym_name = f"{sym_name}{template}"
-
-    if node.kind == clang.cindex.CursorKind.FUNCTION_DECL:
+    func_template = ""
+    if node.kind == clang.cindex.CursorKind.FUNCTION_TEMPLATE: # TODO: this case is obsolete
+        func_template = get_template_list_from_declaration(node)
+    elif node.kind == clang.cindex.CursorKind.FUNCTION_DECL:
         # TODO: what if func_ptr points to a template function
         # TODO: provide template info for other function kinds
-        template = get_template_list_from_instantiation(node)
-        sym_name = f"{sym_name}{template}"
+        func_template = get_template_list_from_instantiation(node)
 
     parent = node.semantic_parent
+    parent_name = ""
     if parent.kind in [clang.cindex.CursorKind.CLASS_DECL, clang.cindex.CursorKind.STRUCT_DECL]:
-        sym_name = f"{parent.type.spelling}::{sym_name}"
-    elif parent.kind == clang.cindex.CursorKind.CLASS_TEMPLATE:
-        template = get_template_list_from_declaration(parent)
-        sym_name = f"{parent.spelling}{template}::{sym_name}"
+        parent_name = parent.type.spelling + "::"
+    elif parent.kind == clang.cindex.CursorKind.CLASS_TEMPLATE: # TODO: this case is obsolete
+        parent_template = get_template_list_from_declaration(parent)
+        parent_name = parent.spelling + parent_template + "::"
 
+    return_type = ""
     if node.kind != clang.cindex.CursorKind.CONSTRUCTOR:
         if node.kind == clang.cindex.CursorKind.VAR_DECL:
             # function pointer
-            return_type = replace_lambda_name(node.type.get_pointee().get_result().spelling)
+            return_type = replace_lambda_name(node.type.get_pointee().get_result().spelling) + ' '
             sym_name = f"(*{sym_name})"
         else:
-            return_type = replace_lambda_name(node.type.get_result().spelling)
-        sym_name = f"{return_type} {sym_name}"
+            return_type = replace_lambda_name(node.type.get_result().spelling) + ' '
 
-    sym_name = f"{sym_name}({get_param_list(node)})"
+    param_str = get_param_list(node)
+
+    full_sym_name = f"{return_type}{parent_name}{sym_name}{func_template}({param_str})"
+
+    if len(full_sym_name) > MAX_SYMBOL_LENGTH:
+        # if the name is too long, trim the name
+        return_type = utils.trim_namespace(return_type, False)
+        parent_name = utils.trim_namespace(parent_name, False)
+        func_template = utils.trim_namespace(func_template, False)
+        param_str = utils.trim_namespace(param_str, False)
+
+        full_sym_name = f"{return_type}{parent_name}{sym_name}{func_template}({param_str})"
+    if len(full_sym_name) > MAX_SYMBOL_LENGTH:
+        # still too long
+        if "<" in parent_name:
+            # use .spelling instead of .type.spelling, .spelling doesn't contain the template part
+            parent_name = utils.trim_namespace(parent.spelling) + "<>::"
+        if func_template:
+            func_template = "<>"
+        param_str = utils.trim_namespace(get_param_list(node, type_only=True), False)
+        full_sym_name = f"{return_type}{parent_name}{sym_name}{func_template}({param_str})"
 
     loc = utils.get_symbol_decl_loc_from_def(node)
 
-    symbol_dict[unique_id] = {"name": sym_name, "has_template_callee": has_template_callee, "loc": loc}
+    symbol_dict[unique_id] = {"name": full_sym_name, "has_template_callee": has_template_callee, "loc": loc}
 
-    if sym_name not in unique_id_dict:
-        unique_id_dict[sym_name] = []
-    unique_id_dict[sym_name].append(unique_id)
+    if full_sym_name not in unique_id_dict:
+        unique_id_dict[full_sym_name] = []
+    unique_id_dict[full_sym_name].append(unique_id)
 
     if node.kind != clang.cindex.CursorKind.FUNCTION_TEMPLATE:
         process_ast(node)
@@ -121,7 +142,7 @@ def get_template_list_from_instantiation(node):
     else:
         return ""
 
-def get_param_list(node: clang.cindex.Cursor):
+def get_param_list(node: clang.cindex.Cursor, type_only=False):
     params = []
     if node.kind == clang.cindex.CursorKind.FUNCTION_TEMPLATE:
         for child in node.get_children():
@@ -134,7 +155,10 @@ def get_param_list(node: clang.cindex.Cursor):
                     continue
                 param_type = replace_lambda_name(grandchild.spelling)
                 break
-            params.append(f"{param_type} {param_name}".strip())
+            if type_only:
+                params.append(param_type.strip())
+            else:
+                params.append(f"{param_type} {param_name}".strip())
     elif node.kind == clang.cindex.CursorKind.VAR_DECL:
         # function pointer
         for param in node.type.get_canonical().get_pointee().argument_types():
@@ -143,7 +167,10 @@ def get_param_list(node: clang.cindex.Cursor):
     else:
         for param in node.get_arguments():
             param_type = replace_lambda_name(param.type.spelling)
-            params.append( (param_type + " " + param.spelling).strip() )
+            if type_only:
+                params.append(param_type.strip())
+            else:
+                params.append( f"{param_type} {param.spelling}".strip() )
 
     param_str = ", ".join(params)
     return param_str
