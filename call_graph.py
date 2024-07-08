@@ -345,21 +345,24 @@ def graph_report(call_dict: dict, query: list, out_file: str):
 
     if not query:
         # print all nodes and edges
-        generate_graph(None, call_dict, call_dict.keys(), dot, inserted, args)
+        generate_graph(None, call_dict, call_dict.keys(), dot, inserted, 0, args)
     else:
-        generate_graph(reserve_dict, call_dict, query, dot, inserted, args)
+        generate_graph(reserve_dict, call_dict, query, dot, inserted, 0, args)
 
     dot.render(out_file, format='pdf')
     print("use https://www.devtoolsdaily.com/graphviz to view graph")
     print(f"graph file is at ./{out_file}")
 
-def generate_graph(parent_dict: dict, child_dict: dict, nodes: list, dot: graphviz.Digraph, inserted: dict, args):
+def generate_graph(parent_dict: dict, child_dict: dict, nodes: list, dot: graphviz.Digraph, inserted: dict, level: int, args):
     if isinstance(nodes, str):
         nodes = [nodes]
 
+    level += 1
+
     for curr_node in nodes:
+
         # travese towards up
-        if parent_dict and args.up:
+        if parent_dict and args.up and (args.up_level < 0 or level <= args.up_level):
             for other_node in parent_dict.get(curr_node, []):
                 edge_key = f"{other_node}->{curr_node}"
                 if edge_key in inserted:
@@ -367,13 +370,13 @@ def generate_graph(parent_dict: dict, child_dict: dict, nodes: list, dot: graphv
 
                 insert_to_dot(dot, other_node, curr_node, edge_key, inserted)
                 if args.connected:
-                    generate_graph(parent_dict, child_dict, other_node, dot, inserted, args)
+                    generate_graph(parent_dict, child_dict, other_node, dot, inserted, level, args)
                 else:
                     # don't need the child of the parent
-                    generate_graph(parent_dict, None, other_node, dot, inserted, args)
+                    generate_graph(parent_dict, None, other_node, dot, inserted, level, args)
 
         # travese towards down
-        if child_dict and args.down:
+        if child_dict and args.down and (args.down_level < 0 or level <= args.down_level):
             for other_node in child_dict.get(curr_node, []):
                 edge_key = f"{curr_node}->{other_node}"
                 if edge_key in inserted:
@@ -381,10 +384,10 @@ def generate_graph(parent_dict: dict, child_dict: dict, nodes: list, dot: graphv
 
                 insert_to_dot(dot, curr_node, other_node, edge_key, inserted)
                 if args.connected:
-                    generate_graph(parent_dict, child_dict, other_node, dot, inserted, args)
+                    generate_graph(parent_dict, child_dict, other_node, dot, inserted, level, args)
                 else:
                     # don't need the parent of the child
-                    generate_graph(None, child_dict, other_node, dot, inserted, args)
+                    generate_graph(None, child_dict, other_node, dot, inserted, level, args)
 
 def insert_to_dot(dot: graphviz.Digraph, src: str, dest: str, edge_key: str, inserted: dict, **attrs):
     src_name = insert_node_to_dot(dot, src, inserted)
@@ -414,6 +417,10 @@ if __name__ == "__main__":
     parser.add_argument('--excl', action='append', help="file or directory names to be excluded, support glob, support multiple --excl")
     parser.add_argument('-v', '--verbal', action='store_true', help="turn on verbel printouts")
 
+    parser.add_argument('-l', '--level', action='store', default=-1, type=int, help="level of traversal in both direction")
+    parser.add_argument('--up-level', '--up-lv', action='store', default=-1, type=int, metavar='LEVEL' , help="level of traversal towards the caller direction")
+    parser.add_argument('--down-level', '--down-lv', action='store', default=-1, type=int, metavar='LEVEL' , help="level of traversal towards the callee direction")
+
     parser.add_argument('-u', '--up', action='store_true', help="only find the callers (and their callers)")
     parser.add_argument('-d', '--down', action='store_true', help="only find the callees (and their callees)")
     parser.add_argument('-r', '--related', action='store_true', help="find both the callers and the callees, this is the default")
@@ -435,6 +442,12 @@ if __name__ == "__main__":
     if args.related == True or args.connected == True:
         args.up = True
         args.down = True
+
+    if args.level != -1:
+        if args.up_level == -1:
+            args.up_level = args.level
+        if args.down_level == -1:
+            args.down_level = args.level
 
     if not args.path:
         args.path = os.getcwd() # Use the current directory if no argument is provided
