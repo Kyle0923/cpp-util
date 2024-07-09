@@ -39,11 +39,14 @@ def register_func(node: clang.cindex.Cursor, has_template_callee: bool = False):
 
     parent = node.semantic_parent
     parent_name = ""
+    parent_seperator = ""
     if parent.kind in [clang.cindex.CursorKind.CLASS_DECL, clang.cindex.CursorKind.STRUCT_DECL]:
-        parent_name = parent.type.spelling + "::"
+        parent_name = parent.type.spelling
+        parent_seperator = "::"
     elif parent.kind == clang.cindex.CursorKind.CLASS_TEMPLATE: # TODO: this case is obsolete
         parent_template = utils.get_template_list_from_declaration(parent)
-        parent_name = parent.spelling + parent_template + "::"
+        parent_name = parent.spelling + parent_template
+        parent_seperator = "::"
 
     return_type = ""
     if node.kind != clang.cindex.CursorKind.CONSTRUCTOR:
@@ -56,29 +59,30 @@ def register_func(node: clang.cindex.Cursor, has_template_callee: bool = False):
 
     param_str = utils.get_param_list(node)
 
-    full_sym_name = f"{return_type}{parent_name}{sym_name}{func_template}({param_str})"
+    full_sym_name = f"{return_type}{parent_name}{parent_seperator}{sym_name}{func_template}({param_str})"
+    display_name = full_sym_name
 
-    if len(full_sym_name) > MAX_SYMBOL_LENGTH:
+    if len(display_name) > MAX_SYMBOL_LENGTH:
         # if the name is too long, trim the name
         return_type = utils.trim_namespace(return_type, False)
         parent_name = utils.trim_namespace(parent_name, False)
         func_template = utils.trim_namespace(func_template, False)
         param_str = utils.trim_namespace(param_str, False)
 
-        full_sym_name = f"{return_type}{parent_name}{sym_name}{func_template}({param_str})"
-    if len(full_sym_name) > MAX_SYMBOL_LENGTH:
+        display_name = f"{return_type}{parent_name}{parent_seperator}{sym_name}{func_template}({param_str})"
+    if len(display_name) > MAX_SYMBOL_LENGTH:
         # still too long
         if "<" in parent_name:
             # use .spelling instead of .type.spelling, .spelling doesn't contain the template part
-            parent_name = utils.trim_namespace(parent.spelling) + "<>::"
+            parent_name = utils.trim_namespace(parent.spelling) + "<>"
         if func_template:
             func_template = "<>"
         param_str = utils.trim_namespace(utils.get_param_list(node, type_only=True), False)
-        full_sym_name = f"{return_type}{parent_name}{sym_name}{func_template}({param_str})"
+        display_name = f"{return_type}{parent_name}{parent_seperator}{sym_name}{func_template}({param_str})"
 
     loc = utils.get_symbol_decl_loc_from_def(node)
 
-    symbol_dict[unique_id] = {"name": full_sym_name, "has_template_callee": has_template_callee, "loc": loc}
+    symbol_dict[unique_id] = {"name": full_sym_name, "display_name": display_name, "has_template_callee": has_template_callee, "loc": loc}
 
     if full_sym_name not in unique_id_dict:
         unique_id_dict[full_sym_name] = []
@@ -333,7 +337,7 @@ def insert_to_dot(dot: graphviz.Digraph, src: str, dest: str, edge_key: str, ins
 def insert_node_to_dot(dot: graphviz.Digraph, node: str, inserted: dict, **attrs) -> str:
     global symbol_dict
     node_name = node.replace(":", "~")
-    label = symbol_dict[node]["name"]
+    label = symbol_dict[node]["display_name"]
     if node not in inserted:
         dot.node(node_name, label, tooltip=symbol_dict[node]["loc"], **attrs)
     inserted[node] = True

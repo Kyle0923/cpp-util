@@ -271,7 +271,7 @@ def get_template_list_from_instantiation(node):
 
         if node_kind == clang.cindex.TemplateArgumentKind.TYPE:
             type_name = node.get_template_argument_type(idx).spelling
-            if is_lambda(type_name):
+            if is_lambda_type(type_name):
                 template_args.append("(lambda)")
             else:
                 template_args.append(node.get_template_argument_type(idx).spelling)
@@ -327,11 +327,11 @@ def get_param_list(node: clang.cindex.Cursor, type_only=False):
 
 
 def replace_lambda_name(typename: str):
-    if is_lambda(typename):
+    if is_lambda_type(typename):
         return trim_lambda_name(typename)
     return typename
 
-def is_lambda(typename: str):
+def is_lambda_type(typename: str):
     return typename.startswith("(lambda at")
 
 def trim_lambda_name(typename: str):
@@ -451,6 +451,9 @@ def trim_namespace(symbol_name, preserve_std = True):
             continue
         temp_part += char
         if char == ':':
+            if (temp_part.startswith("lambda@")):
+                # continue for lambda types
+                continue
             if preserve_std and (temp_part == 'std:' or temp_part == 'std::'):
                 continue
             temp_part = ''
