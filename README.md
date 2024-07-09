@@ -26,6 +26,7 @@ bear -- make
 
 ## class_graph.py
 Generate a graph of the C++ class inheritance hierarchy
+![class_graph](https://github.com/Kyle0923/cpp-util/assets/29618161/a4e510a7-75ac-4147-8e4d-409a6dd9282a)
 
 ### usage
 Run the script at the root path of the project or use `--path` to specify the run path
@@ -57,6 +58,7 @@ options:
 
 ## call_graph.py
 Generate a call graph for the C++ functions
+![call_graph](https://github.com/Kyle0923/cpp-util/assets/29618161/69354824-c702-463a-b441-0cd20dbf4e11)
 
 ### usage
 Run the script at the root path of the project or use `--path` to specify the run path
