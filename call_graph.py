@@ -28,6 +28,23 @@ def register_func(node: clang.cindex.Cursor, has_template_callee: bool = False):
         symbol_dict[unique_id]["has_template_callee"] |= has_template_callee
         return unique_id
 
+    full_sym_name, display_name = get_function_name(node)
+    loc = utils.get_symbol_decl_loc_from_def(node)
+
+    symbol_dict[unique_id] = {"name": full_sym_name, "display_name": display_name, "has_template_callee": has_template_callee, "loc": loc}
+
+    if full_sym_name not in unique_id_dict:
+        unique_id_dict[full_sym_name] = []
+    unique_id_dict[full_sym_name].append(unique_id)
+
+    if node.kind != clang.cindex.CursorKind.FUNCTION_TEMPLATE:
+        process_ast(node)
+
+    return unique_id
+
+# recompose the function/method full name
+# in the form of [return_type] [class]<template>::[function_name]<template>(param_type param_name, ...)
+def get_function_name(node: clang.cindex.Cursor):
     sym_name = node.spelling
     func_template = ""
     if node.kind == clang.cindex.CursorKind.FUNCTION_TEMPLATE: # TODO: this case is obsolete
@@ -80,18 +97,7 @@ def register_func(node: clang.cindex.Cursor, has_template_callee: bool = False):
         param_str = utils.trim_namespace(utils.get_param_list(node, type_only=True), False)
         display_name = f"{return_type}{parent_name}{parent_seperator}{sym_name}{func_template}({param_str})"
 
-    loc = utils.get_symbol_decl_loc_from_def(node)
-
-    symbol_dict[unique_id] = {"name": full_sym_name, "display_name": display_name, "has_template_callee": has_template_callee, "loc": loc}
-
-    if full_sym_name not in unique_id_dict:
-        unique_id_dict[full_sym_name] = []
-    unique_id_dict[full_sym_name].append(unique_id)
-
-    if node.kind != clang.cindex.CursorKind.FUNCTION_TEMPLATE:
-        process_ast(node)
-
-    return unique_id
+    return full_sym_name, display_name
 
 def process_ast(cursor: clang.cindex.Cursor):
     global symbol_dict, call_dict, project_dir
@@ -115,28 +121,7 @@ def process_ast(cursor: clang.cindex.Cursor):
         for child in def_node.walk_preorder():
             if not child.kind == clang.cindex.CursorKind.CALL_EXPR:
                 continue
-
-            if child.type.kind == clang.cindex.TypeKind.DEPENDENT:
-                # template function
-                register_func(node, True) # set flag `has_template_callee` to True
-            else:
-                if not child.get_definition() and not child.referenced:
-                    # functions defined in other translation unit has no .get_definition() but has .referenced
-                    # some other CALL_EXPR nodes has neither, these are usually compiler generated intermediate CALL_EXPR
-                    continue
-                # normal function
-                if child.get_definition() and child.get_definition().is_default_method():
-                    # compiler-provided methods such as default ctor, copy/move ctor, ...
-                    continue
-                if child.referenced.kind == clang.cindex.CursorKind.CONVERSION_FUNCTION:
-                    # conversion (casting) functions such as `operator int()` usually don't provide much useful information
-                    # about the call flow. Also for lambdas and function pointers, the function signatures are very hard to read
-                    # e.g., `int (*ptr)(void) = []() {return 0;}` will invoke a conversion function `int (*)() ::operator int (*)()()`
-                    # so we ignore them
-                    continue
-                callee_id = register_func(child.referenced)
-                if callee_id not in callee:
-                    callee.append(callee_id)
+            process_call_expr(child, callee)
 
         if caller_id not in call_dict:
             call_dict[caller_id] = callee
@@ -144,6 +129,34 @@ def process_ast(cursor: clang.cindex.Cursor):
             call_dict[caller_id] += [func for func in callee if func not in call_dict[caller_id]]
 
     return
+
+def process_call_expr(node: clang.cindex.Cursor, callee: list):
+    if node.kind != clang.cindex.CursorKind.CALL_EXPR:
+        raise ValueError(f"wrong node: {node.spelling}, {node.kind}")
+
+    if node.type.kind == clang.cindex.TypeKind.DEPENDENT:
+        # template function
+        # register_func(node, True) # set flag `has_template_callee` to True
+        pass
+    else:
+        if not node.get_definition() and not node.referenced:
+            # functions defined in other translation unit has no .get_definition() but has .referenced
+            # some other CALL_EXPR nodes has neither, these are usually compiler generated intermediate CALL_EXPR
+            return
+        # normal function
+        if node.get_definition() and node.get_definition().is_default_method():
+            # compiler-provided methods such as default ctor, copy/move ctor, ...
+            return
+        if node.referenced.kind == clang.cindex.CursorKind.CONVERSION_FUNCTION:
+            # conversion (casting) functions such as `operator int()` usually don't provide much useful information
+            # about the call flow. Also for lambdas and function pointers, the function signatures are very hard to read
+            # e.g., `int (*ptr)(void) = []() {return 0;}` will invoke a conversion function `int (*)() ::operator int (*)()()`
+            # so we ignore them
+            return
+        callee_id = register_func(node.referenced)
+        if callee_id not in callee:
+            callee.append(callee_id)
+
 
 def parse_file(filename, index):
     if (utils.path_name_match(filename, args.excl)):
