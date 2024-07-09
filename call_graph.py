@@ -53,6 +53,11 @@ def get_function_name(node: clang.cindex.Cursor):
         # TODO: what if func_ptr points to a template function
         # TODO: provide template info for other function kinds
         func_template = utils.get_template_list_from_instantiation(node)
+    else:
+        # TODO: get the template args for class member functions
+        # https://discourse.llvm.org/t/get-template-args-from-instantiated-member-function-python/79998
+        if f"{sym_name}<>" in node.displayname:
+            func_template = "<>"
 
     parent = node.semantic_parent
     parent_name = ""
