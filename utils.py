@@ -238,6 +238,111 @@ def get_symbol_decl_loc_from_def(node) -> str:
         return get_symbol_loc(node)
     return get_symbol_loc(node.canonical)
 
+
+# this is used to parse the declaration AST to gather the original template arguments
+# only use for non-member functions
+# e.g., template <typename T, int N> void func(int a) => returns <T, int>
+def get_template_list_from_declaration(node: clang.cindex.Cursor):
+    if node.kind not in [clang.cindex.CursorKind.CLASS_TEMPLATE, clang.cindex.CursorKind.FUNCTION_TEMPLATE]:
+        raise ValueError(f"wrong node: {node.spelling}")
+    template_types = []
+    for child in node.get_children():
+        if child.kind == clang.cindex.CursorKind.TEMPLATE_TYPE_PARAMETER:
+            template_types.append(child.spelling)
+        elif child.kind == clang.cindex.CursorKind.TEMPLATE_NON_TYPE_PARAMETER:
+            template_types.append(child.type.spelling)
+
+    return "<" + (", ".join(template_types)) + ">"
+
+# this is used to gather the actual template arguments that are used for instantiation
+# e.g., func<int, 1>(); => returns <int, 1>
+def get_template_list_from_instantiation(node):
+    if node.type.kind != clang.cindex.TypeKind.FUNCTIONPROTO:
+        raise ValueError(f"wrong node: {node.spelling}")
+    template_args = []
+
+    for idx in range(0, node.get_num_template_arguments()):
+        node_kind = None
+        try:
+            # clang will throw on variadic templates
+            node_kind = node.get_template_argument_kind(idx)
+        except:
+            continue
+
+        if node_kind == clang.cindex.TemplateArgumentKind.TYPE:
+            type_name = node.get_template_argument_type(idx).spelling
+            if is_lambda(type_name):
+                template_args.append("(lambda)")
+            else:
+                template_args.append(node.get_template_argument_type(idx).spelling)
+        elif node_kind == clang.cindex.TemplateArgumentKind.INTEGRAL:
+            template_args.append( str(node.get_template_argument_value(idx)) )
+        elif node_kind in [clang.cindex.TemplateArgumentKind.NULL, clang.cindex.TemplateArgumentKind.NULLPTR]:
+            continue
+        else:
+            # ref: https://github.com/llvm-mirror/clang/blob/aa231e4be75ac4759c236b755c57876f76e3cf05/bindings/python/clang/cindex.py#L1383
+            # the last kind is DECLARATION meaning the template arg is an pointer or reference to some object
+            continue
+
+    if template_args:
+        return "<" + (", ".join(template_args)) + ">"
+    elif node.get_num_template_arguments() > 0:
+        # template args contains only NULL, NULLPTR, or DECLARATION
+        return "<>"
+    else:
+        return ""
+
+def get_param_list(node: clang.cindex.Cursor, type_only=False):
+    params = []
+    if node.kind == clang.cindex.CursorKind.FUNCTION_TEMPLATE:
+        for child in node.get_children():
+            if child.kind != clang.cindex.CursorKind.PARM_DECL:
+                continue
+            param_name = child.spelling
+            param_type = ""
+            for grandchild in child.get_children():
+                if grandchild.kind != clang.cindex.CursorKind.TYPE_REF:
+                    continue
+                param_type = replace_lambda_name(grandchild.spelling)
+                break
+            if type_only:
+                params.append(param_type.strip())
+            else:
+                params.append(f"{param_type} {param_name}".strip())
+    elif node.kind == clang.cindex.CursorKind.VAR_DECL:
+        # function pointer
+        for param in node.type.get_canonical().get_pointee().argument_types():
+            param_type = replace_lambda_name(param.spelling)
+            params.append( param_type.strip() )
+    else:
+        for param in node.get_arguments():
+            param_type = replace_lambda_name(param.type.spelling)
+            if type_only:
+                params.append(param_type.strip())
+            else:
+                params.append( f"{param_type} {param.spelling}".strip() )
+
+    param_str = ", ".join(params)
+    return param_str
+
+
+def replace_lambda_name(typename: str):
+    if is_lambda(typename):
+        return trim_lambda_name(typename)
+    return typename
+
+def is_lambda(typename: str):
+    return typename.startswith("(lambda at")
+
+def trim_lambda_name(typename: str):
+    # e.g., "(lambda at /file/foo.cpp:10:2) &&"
+    suffix = typename.split(')')[-1]
+    location = typename.split('at', 1)[1].strip()
+    file, line, _ = location.split(':')
+    file = os.path.basename(file)
+    param_type = f"(lambda@{file}:{line}){suffix}"
+    return param_type
+
 ##############################################################################################################
 # clang interaction
 ##############################################################################################################
