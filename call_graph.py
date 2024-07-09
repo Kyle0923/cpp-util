@@ -366,7 +366,7 @@ def insert_node_to_dot(dot: graphviz.Digraph, node: str, inserted: dict, **attrs
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='generate the inheritance hierarchy')
+    parser = argparse.ArgumentParser(description='generate call graph')
     parser.add_argument('--rebuild', action='store_true', help="regenerate the json database, use when source code is modify")
     parser.add_argument('--compile_db', metavar="compile_commands.json", help="JSON Compilation Database in Clang Format, will attempt to use ./compile_commands.json when not provided")
     parser.add_argument('--path', help="path to workspace root, defult is current directory")
@@ -385,7 +385,7 @@ if __name__ == "__main__":
     parser.add_argument('-r', '--related', action='store_true', help="find both the callers and the callees, this is the default")
     parser.add_argument('-c', '--connected', '--all', action='store_true', help="find all connected nodes in the call graph, includes for example, other callees of the caller (sibling nodes), only available in graph report")
 
-    parser.add_argument('functions', nargs='*', help="name(s) of the querying functions")
+    parser.add_argument('functions', nargs='*', help="name(s) of the querying functions, use * for fuzzy match, e.g, a*d matches abd and abcd")
 
 
     global args
