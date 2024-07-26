@@ -110,7 +110,7 @@ def graph_report(parent_dict: dict, query: list, out_file: str, args, secondary_
         generate_graph(parent_dict, child_dict, matched_nodes, dot, inserted, args, secondary_edge)
 
     dot.render(out_file, format='pdf')
-    print("use https://dreampuf.github.io/GraphvizOnline/ to view graph")
+    print("use https://www.devtoolsdaily.com/graphviz to view graph")
     print(f"graph file is at ./{out_file}")
 
 # generate a graph view of the class hierarchy using Graphviz
@@ -358,11 +358,10 @@ def parse_compile_options(dir: str, args) -> list:
     global compile_db
     compile_db = {}
 
-    if not args.compile_db:
-        args.compile_db = os.path.join(dir, "compile_commands.json")
-    if os.path.isfile(args.compile_db):
-        parse_compile_commands_json(args.compile_db)
-        return compile_db.keys() # return a list of the source files
+    for compile_db_path in [args.compile_db, os.path.join(dir, "compile_commands.json"), os.path.join(dir, ".cpp_util/compile_commands.json")]:
+        if compile_db_path and os.path.isfile(compile_db_path):
+            parse_compile_commands_json(compile_db_path)
+            return compile_db.keys() # return a list of the source files
 
     guess_incl_path(dir)
     return []
@@ -374,7 +373,7 @@ def parse_compile_commands_json(file: str):
     for obj in json_db:
         compile_options = trim_compile_options(obj["arguments"])
         abs_path = os.path.join(obj["directory"], obj["file"])
-        compile_db[abs_path] = compile_options
+        compile_db[abs_path] = {"opts": compile_options, "dir": obj["directory"]}
 
 # only keep -I, -D, and -std options
 def trim_compile_options(options: list) -> list:

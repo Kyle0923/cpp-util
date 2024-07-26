@@ -6,7 +6,7 @@ import clang.cindex
 import graphviz
 import utils
 
-FUNCTION_GRAPH_DB_JSON = "function_graph_db.json"
+FUNCTION_GRAPH_DB_JSON = ".cpp_util/function_graph_db.json"
 
 # location = "file:line" of the declaration, cannot use definition because the def can be in other translation unit
 symbol_dict = {} # "unique_id": {"name": full_sym_name, "display_name": display_name, "loc": loc}
@@ -160,13 +160,16 @@ def parse_file(filename, index):
         additional_options = ['-x', 'c++-header'] # treat .h as c++ header
         abs_path = os.path.abspath(filename)
         if abs_path in utils.compile_db:
-            additional_options += utils.compile_db[abs_path]
+            additional_options += utils.compile_db[abs_path]["opts"]
         else:
             additional_options += utils.compile_default_options.keys()
 
+        if abs_path in utils.compile_db:
+            os.chdir(utils.compile_db[abs_path]["dir"])
+
         translation_unit = index.parse(filename, additional_options)
     except Exception as e:
-        print(f"Error parsing file {filename}: {e}")
+        print(f"parse_file(): Exception thrown during parsing file {filename}: {e}")
         return
 
     for diag in translation_unit.diagnostics:
@@ -221,18 +224,21 @@ def generate_function_dict(dir: str):
 
     if not parse_error:
         utils.verbal(args, "saving parse output to", full_json_db_path)
+        cache_dir = os.path.dirname(full_json_db_path)
+        if not os.path.isdir(cache_dir):
+            os.mkdir(cache_dir)
         with open(full_json_db_path, 'w') as fd:
             json.dump({"symbol_dict": symbol_dict, "call_dict": call_dict, "unique_id_dict": unique_id_dict}, fd)
 
     return
 
-def main(dir: str):
+def main(start_dir: str, ws_dir: str):
     global symbol_dict, call_dict, unique_id_dict, project_dir, args
 
-    project_dir = os.path.abspath(dir)
+    project_dir = os.path.abspath(ws_dir)
 
     utils.verbal(args, "workspace path:", project_dir)
-    generate_function_dict(dir)
+    generate_function_dict(project_dir)
     query = args.functions
     query_symbol = utils.search_query(list(unique_id_dict.keys()), query)
     # FIXME: doesn't match `Bar<T>::func1`
@@ -251,6 +257,9 @@ def main(dir: str):
     query_id = []
     for q in query_symbol:
         query_id.extend(unique_id_dict[q])
+
+    # back to starting dir, report will be under here
+    os.chdir(start_dir)
 
     # TODO: implement tree_report
 
@@ -397,4 +406,4 @@ if __name__ == "__main__":
     if not args.path:
         args.path = os.getcwd() # Use the current directory if no argument is provided
 
-    main(args.path)
+    main(os.getcwd(), args.path)

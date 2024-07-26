@@ -12,7 +12,7 @@ WS_ROOT = ""
 # when finished parsing the directory, this script will dump the result to this json file
 # the second run of this script will use this json file instead, this will save time for parsing
 # use --rebuild to regenerate this json file when source code is updated
-CLASS_GRAPH_DB_JSON = "class_graph_db.json"
+CLASS_GRAPH_DB_JSON = ".cpp_util/class_graph_db.json"
 
 def find_class_relations(node, inheritances: dict, templates: dict):
     node_name = utils.get_full_type_name(node)
@@ -59,13 +59,16 @@ def parse_file(filename, index):
         additional_options = ['-x', 'c++-header'] # treat .h as c++ header
         abs_path = os.path.abspath(filename)
         if abs_path in utils.compile_db:
-            additional_options += utils.compile_db[abs_path]
+            additional_options += utils.compile_db[abs_path]["opts"]
         else:
             additional_options += utils.compile_default_options.keys()
 
+        if abs_path in utils.compile_db:
+            os.chdir(utils.compile_db[abs_path]["dir"])
+
         translation_unit = index.parse(filename, additional_options)
     except Exception as e:
-        print(f"Error parsing file {filename}: {e}")
+        print(f"parse_file(): Exception thrown during parsing file {filename}: {e}")
         return {}, {}
 
     for diag in translation_unit.diagnostics:
@@ -101,7 +104,7 @@ def generate_parent_dict(dir: str):
     global project_dir
     project_dir = os.path.abspath(dir)
 
-    src_files = utils.parse_compile_options(dir, args)
+    src_files = utils.parse_compile_options(project_dir, args)
 
     index = clang.cindex.Index.create()
     parent_dict = {} # key: class, value: base class
@@ -128,17 +131,23 @@ def generate_parent_dict(dir: str):
                 parent_dict.update(classes)
                 template_dict.update(template)
 
+    os.chdir(project_dir)
     if not parse_error:
         utils.verbal(args, "saving parse output to", full_json_db_path)
+        cache_dir = os.path.dirname(full_json_db_path)
+        if not os.path.isdir(cache_dir):
+            os.mkdir(cache_dir)
         with open(full_json_db_path, 'w') as fd:
             json.dump({"parent_dict": parent_dict, "template_dict": template_dict}, fd)
 
     return parent_dict, template_dict
 
-def main(dir):
-    utils.verbal(args, "workspace path:", dir)
-    parent_dict, template_dict = generate_parent_dict(dir)
+def main(start_dir, ws_dir):
+    ws_dir = os.path.abspath(ws_dir)
+    utils.verbal(args, "workspace path:", ws_dir)
+    parent_dict, template_dict = generate_parent_dict(ws_dir)
     query = args.classes
+    os.chdir(start_dir)
     if args.tree:
         utils.tree_report(parent_dict, query, args)
     else:
@@ -171,7 +180,10 @@ if __name__ == "__main__":
         args.base = True
         args.derived = True
 
+    args.path = 'test/class_graph'
+    args.rebuild = True
+
     if not args.path:
         args.path = os.getcwd() # Use the current directory if no argument is provided
 
-    main(args.path)
+    main(os.getcwd(), args.path)
