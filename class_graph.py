@@ -180,9 +180,6 @@ if __name__ == "__main__":
         args.base = True
         args.derived = True
 
-    args.path = 'test/class_graph'
-    args.rebuild = True
-
     if not args.path:
         args.path = os.getcwd() # Use the current directory if no argument is provided
 
