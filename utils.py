@@ -126,7 +126,7 @@ def generate_graph(parent_dict: dict, child_dict: dict, nodes: list, dot: graphv
                 if edge_key in inserted:
                     continue
 
-                insert_to_dot(dot, other_node, curr_node, edge_key, inserted)
+                insert_to_dot(dot, other_node, curr_node, edge_key, inserted, dir="back")
                 if args.connected:
                     generate_graph(parent_dict, child_dict, other_node, dot, inserted, args, secondary_edge)
                 else:
@@ -140,7 +140,7 @@ def generate_graph(parent_dict: dict, child_dict: dict, nodes: list, dot: graphv
                 if edge_key in inserted:
                     continue
 
-                insert_to_dot(dot, curr_node, other_node, edge_key, inserted)
+                insert_to_dot(dot, curr_node, other_node, edge_key, inserted, dir="back")
                 if args.connected:
                     generate_graph(parent_dict, child_dict, other_node, dot, inserted, args, secondary_edge)
                 else:
@@ -174,11 +174,9 @@ def insert_to_dot(dot: graphviz.Digraph, src: str, dest: str, edge_key: str, ins
 # insert to dot if not exist
 # and return the escaped name of the node
 def insert_node_to_dot(dot: graphviz.Digraph, node: str, inserted: dict, **attrs) -> str:
-    node_name = node
-    if "::" in node_name:
-        node_name = node_name.replace("::", "__")
-        if node not in inserted:
-            dot.node(node_name, trim_namespace(node), tooltip=node, **attrs)
+    node_name = node.replace("::", "~")
+    if node not in inserted:
+        dot.node(node_name, trim_namespace(node), tooltip=node, **attrs)
     inserted[node] = True
     return node_name
 
