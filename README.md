@@ -26,7 +26,7 @@ bear -- make
 
 ## class_graph.py
 Generate a graph of the C++ class inheritance hierarchy
-![class_graph](https://github.com/Kyle0923/cpp-util/assets/29618161/a4e510a7-75ac-4147-8e4d-409a6dd9282a)
+![class_graph](https://github.com/user-attachments/assets/e4f8cefd-0d3d-4071-b449-888511d5e8dc)
 
 ### usage
 Run the script at the root path of the project or use `--path` to specify the run path
