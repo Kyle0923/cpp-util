@@ -277,7 +277,7 @@ def main(start_dir: str, ws_dir: str):
 
 def graph_report(call_dict: dict, query: list, out_file: str):
     global args, symbol_dict
-    dot = graphviz.Digraph()
+    dot = graphviz.Digraph(strict=True)
     dot.attr(rankdir="LR", splines="polyline")
     dot.node_attr["shape"] = "box"
     dot.node_attr["style"] = "rounded"

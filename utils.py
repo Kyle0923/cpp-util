@@ -84,7 +84,7 @@ def tree_print(connection: dict, nodes: list, indent: str = "", msg: str = ""):
 
 # secondary_edge is used to represent a secondary relation such as template link
 def graph_report(parent_dict: dict, query: list, out_file: str, args, secondary_edge: dict):
-    dot = graphviz.Digraph()
+    dot = graphviz.Digraph(strict=True)
     dot.node_attr["shape"] = "box"
     dot.node_attr["style"] = "rounded"
     inserted = {}
