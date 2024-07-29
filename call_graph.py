@@ -12,6 +12,8 @@ FUNCTION_GRAPH_DB_JSON = ".cpp_util/function_graph_db.json"
 symbol_dict = {} # "unique_id": {"name": full_sym_name, "display_name": display_name, "loc": loc}
 call_dict = {} # "unique_id": ["callee_1_id", "callee_2_id", ...]
 unique_id_dict = {} # function_name: ["unique_id1", "unique_id2"]
+virtual_table = {} # class_name: ["virtual_func1", "virtual_func2", ....]
+base_dict = {} # class_name: ["base_class1", "base_class2", ...]
 
 MAX_SYMBOL_LENGTH = 100
 
@@ -148,6 +150,12 @@ def process_call_expr(node: clang.cindex.Cursor, callee: list):
     if callee_id not in callee:
         callee.append(callee_id)
 
+def process_virtual_function(node: clang.cindex.Cursor):
+    global virtual_table
+    if node.is_virtual_method() == False:
+        raise ValueError(f"Wrong node: {node.displayname}")
+    class_def = node.semantic_parent
+    base_classes = utils.get_base_classes(class_def)
 
 def parse_file(filename, index):
     if (utils.path_name_match(filename, args.excl)):
@@ -179,8 +187,8 @@ def parse_file(filename, index):
             parse_error = True
             print(f"Missing include: {diag.spelling} - {diag.location.file}:{diag.location.line}")
 
-    # utils.print_ast(translation_unit.cursor)
-    # exit(0)
+    utils.print_ast(translation_unit.cursor)
+    exit(0)
     process_ast(translation_unit.cursor)
     return
 
@@ -390,6 +398,10 @@ if __name__ == "__main__":
     # print("WARNING: using hard-coded path for compile_commands.json")
     # args.path = "test/call_graph_template" # TODO: void callFunction<>() doesn't have the callee (*Func)()
     # args.rebuild = True
+
+    # FIXME: remove test code
+    args.path = "test/call_graph_virtual_func"
+    args.rebuild = True
 
     if args.down == False and args.up == False:
         args.related = True

@@ -1,0 +1,14 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/g++",
+      "-c",
+      "-o",
+      "src/virtual.o",
+      "src/virtual.cpp"
+    ],
+    "directory": "/home/user/programming/cpp-util/test/call_graph_virtual_func",
+    "file": "/home/user/programming/cpp-util/test/call_graph_virtual_func/src/virtual.cpp",
+    "output": "/home/user/programming/cpp-util/test/call_graph_virtual_func/src/virtual.o"
+  }
+]

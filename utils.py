@@ -223,8 +223,8 @@ def print_ast(node, level=0):
 
 def to_string(node) -> str:
     loc_str = get_symbol_loc(node)
-    return f'S: {node.spelling}, K: {node.kind}, PS: {node.semantic_parent.spelling if node.semantic_parent else ""},' + \
-            f'L: {loc_str}, T: {node.type.spelling}, TK: {node.type.kind.spelling}, #T: {node.get_num_template_arguments()}'
+    return f'S: {node.spelling}, D: {node.displayname}, K: {node.kind}, PS: {node.semantic_parent.spelling if node.semantic_parent else ""},' + \
+            f'L: {loc_str}, T: {node.type.spelling}, TK: {node.type.kind.spelling}, #T: {node.get_num_template_arguments()}, vir: {node.is_virtual_method()}'
 
 def get_symbol_loc(node) -> str:
     loc = f"{node.location.file.name}:{node.location.line}" if node.location.file else ""
@@ -341,8 +341,24 @@ def trim_lambda_name(typename: str):
     param_type = f"(lambda@{file}:{line}){suffix}"
     return param_type
 
+def get_base_classes(node:clang.cindex.Cursor):
+    if node.kind.is_declaration():
+        node = node.get_definition()
+    # if node.kind not in [clang.cindex.CursorKind.CLASS_DECL, clang.cindex.CursorKind.STRUCT_DECL, clang.cindex.CursorKind.CLASS_TEMPLATE]:
+    if node.kind not in [clang.cindex.CursorKind.CLASS_DECL, clang.cindex.CursorKind.STRUCT_DECL]:
+        raise ValueError(f'Bad node kind: {node.spelling}, Kind: {node.kind}')
+
+    base_classes = []
+    for child in node.get_children():
+        if child.kind == clang.cindex.CursorKind.CXX_BASE_SPECIFIER:
+            base_classes.append(child.get_definition())
+        else:
+            # CXX_BASE_SPECIFIER is always in the first place
+            break
+    return base_classes
+
 ##############################################################################################################
-# clang interaction
+# compile options
 ##############################################################################################################
 
 # return a list of the source files if compile_commands.json exists
